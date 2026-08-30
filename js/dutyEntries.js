@@ -51,6 +51,9 @@ function isEntryEmpty(entry) {
   if (entry.locoOfferPlace && entry.locoOfferPlace !== LOCO_OFFER_PLACE_OPTIONS[0]) return false;
   if (entry.bpFpPlace && entry.bpFpPlace !== BP_FP_PLACE_OPTIONS[0]) return false;
   if (entry.bpFpPlaceOther || entry.yardSignal || entry.privateNumber || entry.yardMasterName || entry.pmName) return false;
+  if ((entry.privateNumberDetails || []).some((detail) =>
+    detail.signalNumber || detail.fromLine || detail.toLine || detail.departureTime || detail.yardMasterName || detail.pmName
+  )) return false;
   if (entry.placementPfNumber || entry.madeOverChargeName || entry.madeOverChargeHQ) return false;
   if (entry.spareItems && (
     entry.spareItems.otherText ||
@@ -340,10 +343,31 @@ async function showForm(container, setHeaderTitle, entryId) {
   if (!BP_FP_PLACE_OPTIONS.includes(entry.bpFpPlace)) entry.bpFpPlace = BP_FP_PLACE_OPTIONS[0];
   if (entry.bpFpPlaceOther === undefined) entry.bpFpPlaceOther = "";
   if (entry.yardSignal === undefined) entry.yardSignal = "";
-  if (entry.privateDetailsEnabled === undefined) entry.privateDetailsEnabled = false;
-  if (entry.privateNumber === undefined) entry.privateNumber = "";
-  if (entry.yardMasterName === undefined) entry.yardMasterName = "";
-  if (entry.pmName === undefined) entry.pmName = "";
+  if (!Array.isArray(entry.privateNumberDetails)) {
+    entry.privateNumberDetails = [];
+    if (entry.privateNumber || entry.yardMasterName || entry.pmName) {
+      entry.privateNumberDetails.push({
+        id: crypto.randomUUID(),
+        signalNumber: entry.privateNumber || "",
+        fromLine: "",
+        toLine: "",
+        departureTime: null,
+        yardMasterName: entry.yardMasterName || "",
+        pmName: entry.pmName || "",
+        isComplete: true,
+      });
+    }
+  }
+  for (const detail of entry.privateNumberDetails) {
+    if (!detail.id) detail.id = crypto.randomUUID();
+    if (detail.signalNumber === undefined) detail.signalNumber = "";
+    if (detail.fromLine === undefined) detail.fromLine = "";
+    if (detail.toLine === undefined) detail.toLine = "";
+    if (detail.departureTime === undefined) detail.departureTime = null;
+    if (detail.yardMasterName === undefined) detail.yardMasterName = "";
+    if (detail.pmName === undefined) detail.pmName = "";
+    if (detail.isComplete === undefined) detail.isComplete = true;
+  }
   if (entry.placementPfNumber === undefined) entry.placementPfNumber = "";
   if (entry.madeOverChargeName === undefined) entry.madeOverChargeName = "";
   if (entry.madeOverChargeHQ === undefined) entry.madeOverChargeHQ = "";
@@ -1173,34 +1197,10 @@ async function showForm(container, setHeaderTitle, entryId) {
     createMovementDropdownField("Place", "bpFpPlace", BP_FP_PLACE_OPTIONS, "bpFpPlaceOther"),
   ]));
 
-  const privateDetailsRow = el("div", { class: "movement-private-fields hidden" }, [
-    createMovementManualField("Private Number", "privateNumber", "Private number"),
-    createMovementManualField("Yard Master Name", "yardMasterName", "Name"),
-    createMovementManualField("PM Name", "pmName", "Name"),
-  ]);
-  const privateDetailsButton = el("button", {
-    class: "secondary-btn movement-private-btn",
-    type: "button",
-  });
-  function renderPrivateDetails() {
-    privateDetailsRow.classList.toggle("hidden", !entry.privateDetailsEnabled);
-    privateDetailsButton.textContent = entry.privateDetailsEnabled ? "− Hide Private Details" : "+ Private Details";
-  }
-  privateDetailsButton.addEventListener("click", () => {
-    entry.privateDetailsEnabled = !entry.privateDetailsEnabled;
-    renderPrivateDetails();
-    onFieldChange();
-  });
-  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
     createMovementTimeField("Yard Dep", "departureTime"),
     createMovementHistoryField("Signal", "yardSignal"),
-    el("div", { class: "movement-detail-field" }, [
-      el("label", {}, "Private Details"),
-      privateDetailsButton,
-    ]),
   ]));
-  timelineSection.appendChild(privateDetailsRow);
-  renderPrivateDetails();
 
   timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
     createMovementTimeField("Placement Time", "placementTime"),
@@ -1216,6 +1216,118 @@ async function showForm(container, setHeaderTitle, entryId) {
     createMovementTimeField("Made Over Charge Time", "madeOverChargeTime"),
   ]));
   remainingDetailsPage.appendChild(timelineSection);
+
+  const privateNumberCount = el("span", { class: "private-number-fab-count hidden" }, "0");
+  const privateNumberFab = el("button", {
+    class: "private-number-fab",
+    type: "button",
+    "aria-label": "Add Private Number Details",
+  }, [
+    el("span", { class: "private-number-fab-plus" }, "+"),
+    el("span", { class: "private-number-fab-label" }, "PN"),
+    privateNumberCount,
+  ]);
+
+  function renderPrivateNumberFab() {
+    const count = entry.privateNumberDetails.length;
+    privateNumberCount.textContent = String(count);
+    privateNumberCount.classList.toggle("hidden", count === 0);
+  }
+
+  function openPrivateNumberPrompt() {
+    let detail = entry.privateNumberDetails.find((candidate) => candidate.isComplete !== true);
+    if (!detail) {
+      detail = {
+        id: crypto.randomUUID(),
+        signalNumber: "",
+        fromLine: "",
+        toLine: "",
+        departureTime: null,
+        yardMasterName: "",
+        pmName: "",
+        isComplete: false,
+      };
+      entry.privateNumberDetails.push(detail);
+      renderPrivateNumberFab();
+      onFieldChange();
+    }
+
+    const overlay = el("div", { class: "overlay" });
+    const closeButton = el("button", {
+      class: "icon-btn",
+      type: "button",
+      "aria-label": "Close Private Number Details",
+      onclick: () => overlay.remove(),
+    }, "×");
+
+    function createPrivateNumberInput(label, fieldKey, placeholder) {
+      return el("div", { class: "movement-detail-field" }, [
+        el("label", {}, label),
+        el("input", {
+          type: "text",
+          value: detail[fieldKey] || "",
+          placeholder,
+          "aria-label": label,
+          oninput: (event) => {
+            detail[fieldKey] = event.target.value;
+            onFieldChange();
+          },
+        }),
+      ]);
+    }
+
+    const detailNumber = entry.privateNumberDetails.indexOf(detail) + 1;
+    const formGrid = el("div", { class: "private-number-form-grid" }, [
+      createPrivateNumberInput("Signal Number", "signalNumber", "Signal number"),
+      createPrivateNumberInput("From Line", "fromLine", "From line"),
+      createPrivateNumberInput("To Line", "toLine", "To line"),
+      el("div", { class: "movement-detail-field" }, [
+        el("label", {}, "Dep Time"),
+        createTimeField(entry.date, detail.departureTime, (value) => {
+          detail.departureTime = value;
+          onFieldChange();
+        }),
+      ]),
+      createPrivateNumberInput("Yard Master Name", "yardMasterName", "Name"),
+      createPrivateNumberInput("PM Name", "pmName", "Name"),
+    ]);
+    const saveButton = el("button", {
+      class: "primary-btn",
+      type: "button",
+      onclick: () => {
+        const hasDetails = detail.signalNumber || detail.fromLine || detail.toLine || detail.departureTime || detail.yardMasterName || detail.pmName;
+        if (!hasDetails) {
+          showToast("Enter Private Number Details first.");
+          return;
+        }
+        detail.isComplete = true;
+        onFieldChange();
+        renderPrivateNumberFab();
+        overlay.remove();
+        showToast("Private Number Details saved for Step 3.");
+      },
+    }, "Save Private Number Details");
+
+    overlay.appendChild(el("div", { class: "overlay-card private-number-dialog" }, [
+      el("div", { class: "private-number-dialog-header" }, [
+        el("div", {}, [
+          el("h2", {}, "Private Number Details"),
+          el("p", {}, `Entry ${detailNumber} · will appear on Step 3`),
+        ]),
+        closeButton,
+      ]),
+      formGrid,
+      saveButton,
+    ]));
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+  }
+
+  privateNumberFab.addEventListener("click", openPrivateNumberPrompt);
+  renderPrivateNumberFab();
+  remainingDetailsPage.appendChild(privateNumberFab);
 
   // --- Remarks ---
   const remarksSection = el("div", { class: "form-section" });
