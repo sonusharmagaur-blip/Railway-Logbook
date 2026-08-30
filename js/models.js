@@ -29,6 +29,8 @@ export const RTIS_STATUS_OPTIONS = Object.values(RTISStatus);
 export const LOCOMOTIVE_TYPE_OPTIONS = ["WAP5", "WAP7", "WAG9", "WAP4", "DSL Loco", "WAG12"];
 export const CAB_OPTIONS = ["Cab-1", "Cab-2"];
 export const PT_TYPE_OPTIONS = ["Normal", "Both HRP", "PT-1 HRP", "PT-2 HRP"];
+export const MAJOR_SCHEDULE_OPTIONS = ["IA", "IB", "IC", "IOH", "POH", "MOH", "NC Loco"];
+export const MINOR_SCHEDULE_TYPE_OPTIONS = ["TI", "VC", "GC"];
 
 // Default schedule types seeded on first launch. User can add more from Settings.
 export const DEFAULT_SCHEDULE_TYPES = ["IA", "IB", "IC", "IOH", "POH", "MOH", "TI"];
@@ -67,6 +69,15 @@ export function newAdditionalLocomotive(role) {
   };
 }
 
+export function newMinorSchedule() {
+  return {
+    id: uuid(),
+    type: MINOR_SCHEDULE_TYPE_OPTIONS[0],
+    date: null,
+    km: null,
+  };
+}
+
 export function newDutyEntry() {
   const now = new Date().toISOString();
   const entry = {
@@ -87,8 +98,9 @@ export function newDutyEntry() {
     uicStatus: UICStatus.NORMAL,
     uicCableOption: null,
     rtisStatus: RTISStatus.WORKING,
-    majorScheduleTypeCode: DEFAULT_SCHEDULE_TYPES[0],
+    majorScheduleTypeCode: MAJOR_SCHEDULE_OPTIONS[0],
     majorScheduleDate: null,
+    minorSchedules: [newMinorSchedule()],
     minorScheduleTIDate: null,
     kmSinceLastSchedule: null,
     lastModified: now,

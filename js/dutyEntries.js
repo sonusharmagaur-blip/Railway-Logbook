@@ -1,9 +1,10 @@
 import { DB } from "./db.js";
 import {
-  newDutyEntry, kmFieldLabel, TIMELINE_STEPS,
+  newDutyEntry, TIMELINE_STEPS,
   AC_STATUS_OPTIONS, UIC_STATUS_OPTIONS, UIC_CABLE_OPTIONS, RTIS_STATUS_OPTIONS,
-  ACStatus, UICStatus, DEFAULT_SCHEDULE_TYPES, LOCOMOTIVE_TYPE_OPTIONS, CAB_OPTIONS,
-  PT_TYPE_OPTIONS, newAdditionalLocomotive,
+  ACStatus, UICStatus, LOCOMOTIVE_TYPE_OPTIONS, CAB_OPTIONS,
+  PT_TYPE_OPTIONS, MAJOR_SCHEDULE_OPTIONS, MINOR_SCHEDULE_TYPE_OPTIONS,
+  newAdditionalLocomotive, newMinorSchedule,
 } from "./models.js";
 import { AutosaveController, wireLifecycleFlush } from "./autosave.js";
 import { el, formatDate, formatTime, createTimeField, createDropdown, todayDateInputValue } from "./util.js";
@@ -20,6 +21,11 @@ function isEntryEmpty(entry) {
   if ((entry.additionalLocomotives || []).some((loco) =>
     loco.locomotiveNumberSnapshot || loco.locomotiveType || loco.locomotiveShed || loco.cabSelection ||
     (loco.ptType && loco.ptType !== PT_TYPE_OPTIONS[0])
+  )) return false;
+  if (entry.majorScheduleDate || (entry.majorScheduleTypeCode && entry.majorScheduleTypeCode !== MAJOR_SCHEDULE_OPTIONS[0])) return false;
+  if ((entry.minorSchedules || []).some((schedule) =>
+    schedule.date || schedule.km !== null && schedule.km !== undefined ||
+    (schedule.type && schedule.type !== MINOR_SCHEDULE_TYPE_OPTIONS[0])
   )) return false;
   for (const step of TIMELINE_STEPS) {
     if (entry[step.key]) return false;
@@ -213,6 +219,20 @@ async function showForm(container, setHeaderTitle, entryId) {
   let entry = await DB.get("dutyEntries", entryId);
   if (!entry.locomotivePTType) entry.locomotivePTType = PT_TYPE_OPTIONS[0];
   if (!Array.isArray(entry.additionalLocomotives)) entry.additionalLocomotives = [];
+  if (!MAJOR_SCHEDULE_OPTIONS.includes(entry.majorScheduleTypeCode)) entry.majorScheduleTypeCode = MAJOR_SCHEDULE_OPTIONS[0];
+  if (!Array.isArray(entry.minorSchedules)) {
+    const migratedSchedule = newMinorSchedule();
+    migratedSchedule.date = entry.minorScheduleTIDate || null;
+    migratedSchedule.km = entry.kmSinceLastSchedule ?? null;
+    entry.minorSchedules = [migratedSchedule];
+  }
+  if (entry.minorSchedules.length === 0) entry.minorSchedules.push(newMinorSchedule());
+  for (const schedule of entry.minorSchedules) {
+    if (!schedule.id) schedule.id = crypto.randomUUID();
+    if (!MINOR_SCHEDULE_TYPE_OPTIONS.includes(schedule.type)) schedule.type = MINOR_SCHEDULE_TYPE_OPTIONS[0];
+    if (schedule.date === undefined) schedule.date = null;
+    if (schedule.km === undefined) schedule.km = null;
+  }
   const locomotives = await DB.getAll("locomotives");
   const allDutyEntries = await DB.getAll("dutyEntries");
   const locomotiveHistory = buildLocomotiveHistory(allDutyEntries, locomotives, entry.id);
@@ -227,9 +247,6 @@ async function showForm(container, setHeaderTitle, entryId) {
       entry.locomotiveShed = remembered.shed;
     }
   }
-  const scheduleTypes = await DB.getAll("scheduleTypes");
-  const scheduleCodes = scheduleTypes.length ? scheduleTypes.sort((a, b) => a.displayOrder - b.displayOrder).map((s) => s.code) : DEFAULT_SCHEDULE_TYPES;
-
   const autosave = new AutosaveController(async () => {
     entry.lastModified = new Date().toISOString();
     await DB.put("dutyEntries", entry);
@@ -544,6 +561,145 @@ async function showForm(container, setHeaderTitle, entryId) {
   ]));
   renderAdditionalLocomotives();
   trainLocoPage.appendChild(tripSection);
+
+  // --- Major Schedule ---
+  const majorScheduleSection = el("div", { class: "form-section" });
+  majorScheduleSection.appendChild(el("div", { class: "form-section-title" }, "Major Schedule"));
+  const majorOverdueAlert = el("div", { class: "schedule-alert hidden" }, "Major Schedule overdue — selected date is more than 90 days old.");
+
+  function renderMajorScheduleAlert() {
+    if (!entry.majorScheduleDate) {
+      majorOverdueAlert.classList.add("hidden");
+      return;
+    }
+    const selectedDate = new Date(`${entry.majorScheduleDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const ninetyDaysAgo = new Date(today);
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    majorOverdueAlert.classList.toggle("hidden", selectedDate >= ninetyDaysAgo);
+  }
+
+  const majorTypeSelect = createDropdown(MAJOR_SCHEDULE_OPTIONS, entry.majorScheduleTypeCode, (value) => {
+    entry.majorScheduleTypeCode = value;
+    onFieldChange();
+  }, { "aria-label": "Major schedule type" });
+  const majorDateInput = el("input", {
+    type: "date",
+    value: entry.majorScheduleDate || "",
+    "aria-label": "Major schedule date",
+    onchange: (event) => {
+      entry.majorScheduleDate = event.target.value || null;
+      renderMajorScheduleAlert();
+      onFieldChange();
+    },
+  });
+  majorScheduleSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields" }, [
+    el("div", { class: "schedule-field" }, [el("label", {}, "Type"), majorTypeSelect]),
+    el("div", { class: "schedule-field" }, [el("label", {}, "Date"), majorDateInput]),
+  ]));
+  majorScheduleSection.appendChild(majorOverdueAlert);
+  renderMajorScheduleAlert();
+  trainLocoPage.appendChild(majorScheduleSection);
+
+  // --- Minor Schedules ---
+  const minorScheduleSection = el("div", { class: "form-section" });
+  minorScheduleSection.appendChild(el("div", { class: "form-section-title" }, "Minor Schedule"));
+  const minorSchedulesHolder = el("div", { class: "minor-schedules" });
+
+  function syncLegacyMinorScheduleFields() {
+    const firstSchedule = entry.minorSchedules[0];
+    entry.minorScheduleTIDate = firstSchedule ? firstSchedule.date || null : null;
+    entry.kmSinceLastSchedule = firstSchedule ? firstSchedule.km ?? null : null;
+  }
+
+  function renderMinorSchedules() {
+    minorSchedulesHolder.innerHTML = "";
+    entry.minorSchedules.forEach((schedule, index) => {
+      const scheduleNumber = index + 1;
+      const kmInput = el("input", {
+        type: "number",
+        inputmode: "decimal",
+        min: "0",
+        value: schedule.km ?? "",
+        placeholder: "KM",
+        "aria-label": `Minor schedule ${scheduleNumber} KM`,
+      });
+      const kmAlert = el("div", { class: "schedule-inline-alert hidden" }, "KM exceeds 4500");
+
+      function renderKmAlert() {
+        const exceedsLimit = schedule.km !== null && schedule.km !== undefined && Number(schedule.km) > 4500;
+        kmInput.classList.toggle("input-alert", exceedsLimit);
+        kmAlert.classList.toggle("hidden", !exceedsLimit);
+      }
+
+      kmInput.addEventListener("input", (event) => {
+        schedule.km = event.target.value === "" ? null : Number(event.target.value);
+        syncLegacyMinorScheduleFields();
+        renderKmAlert();
+        onFieldChange();
+      });
+
+      const scheduleCard = el("div", { class: "minor-schedule-card" }, [
+        el("div", { class: "minor-schedule-header" }, [
+          el("div", { class: "minor-schedule-title" }, `Minor Schedule ${scheduleNumber}`),
+          entry.minorSchedules.length > 1 ? el("button", {
+            class: "remove-loco-btn",
+            type: "button",
+            "aria-label": `Remove minor schedule ${scheduleNumber}`,
+            onclick: () => {
+              entry.minorSchedules.splice(index, 1);
+              syncLegacyMinorScheduleFields();
+              renderMinorSchedules();
+              onFieldChange();
+            },
+          }, "Remove") : null,
+        ]),
+        el("div", { class: "schedule-fields-grid minor-schedule-fields" }, [
+          el("div", { class: "schedule-field" }, [
+            el("label", {}, "Type"),
+            createDropdown(MINOR_SCHEDULE_TYPE_OPTIONS, schedule.type, (value) => {
+              schedule.type = value;
+              onFieldChange();
+            }, { "aria-label": `Minor schedule ${scheduleNumber} type` }),
+          ]),
+          el("div", { class: "schedule-field" }, [
+            el("label", {}, "Date"),
+            el("input", {
+              type: "date",
+              value: schedule.date || "",
+              "aria-label": `Minor schedule ${scheduleNumber} date`,
+              onchange: (event) => {
+                schedule.date = event.target.value || null;
+                syncLegacyMinorScheduleFields();
+                onFieldChange();
+              },
+            }),
+          ]),
+          el("div", { class: "schedule-field" }, [el("label", {}, "KM"), kmInput, kmAlert]),
+        ]),
+      ]);
+      minorSchedulesHolder.appendChild(scheduleCard);
+      renderKmAlert();
+    });
+  }
+
+  minorScheduleSection.appendChild(minorSchedulesHolder);
+  minorScheduleSection.appendChild(el("div", { class: "add-loco-row" }, [
+    el("button", {
+      class: "secondary-btn add-loco-btn",
+      type: "button",
+      onclick: () => {
+        entry.minorSchedules.push(newMinorSchedule());
+        renderMinorSchedules();
+        onFieldChange();
+      },
+    }, "+ Add Minor Schedule"),
+  ]));
+  syncLegacyMinorScheduleFields();
+  renderMinorSchedules();
+  trainLocoPage.appendChild(minorScheduleSection);
+
   trainLocoPage.appendChild(el("button", {
     class: "primary-btn",
     type: "button",
@@ -599,28 +755,6 @@ async function showForm(container, setHeaderTitle, entryId) {
     createDropdown(RTIS_STATUS_OPTIONS, entry.rtisStatus, (v) => { entry.rtisStatus = v; onFieldChange(); }),
   ]));
   remainingDetailsPage.appendChild(statusSection);
-
-  // --- Schedule Info ---
-  const schedSection = el("div", { class: "form-section" });
-  schedSection.appendChild(el("div", { class: "form-section-title" }, "Schedule Info"));
-  schedSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "Major Schedule Type"),
-    createDropdown(scheduleCodes, entry.majorScheduleTypeCode, (v) => { entry.majorScheduleTypeCode = v; onFieldChange(); }),
-  ]));
-  schedSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "Major Schedule Date"),
-    el("input", { type: "date", value: entry.majorScheduleDate || "", onchange: (e) => { entry.majorScheduleDate = e.target.value || null; onFieldChange(); } }),
-  ]));
-  schedSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "Minor Schedule / TI Date (optional)"),
-    el("input", { type: "date", value: entry.minorScheduleTIDate || "", onchange: (e) => { entry.minorScheduleTIDate = e.target.value || null; onFieldChange(); kmLabel.textContent = kmFieldLabel(entry); } }),
-  ]));
-  const kmLabel = el("label", {}, kmFieldLabel(entry));
-  schedSection.appendChild(el("div", { class: "form-row" }, [
-    kmLabel,
-    el("input", { type: "number", inputmode: "decimal", value: entry.kmSinceLastSchedule ?? "", oninput: (e) => { entry.kmSinceLastSchedule = e.target.value === "" ? null : Number(e.target.value); onFieldChange(); } }),
-  ]));
-  remainingDetailsPage.appendChild(schedSection);
 
   // --- Remarks ---
   const remarksSection = el("div", { class: "form-section" });
