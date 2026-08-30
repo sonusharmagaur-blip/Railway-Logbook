@@ -59,6 +59,7 @@ export function newDutyEntry() {
   const entry = {
     id: uuid(),
     date: new Date().toISOString().slice(0, 10), // yyyy-mm-dd
+    movementType: "departure",
     trainNumber: "",
     trainName: "",
     locomotiveId: null,

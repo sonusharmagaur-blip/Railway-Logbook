@@ -8,6 +8,7 @@ import { AutosaveController, wireLifecycleFlush } from "./autosave.js";
 import { el, formatDate, formatTime, createTimeField, createDropdown, todayDateInputValue } from "./util.js";
 import { openExportCard } from "./exportCard.js";
 import { openRangeReport } from "./rangeReport.js";
+import { showToast } from "./toast.js";
 
 let currentUnwireLifecycle = null;
 
@@ -60,6 +61,54 @@ function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
 
 export async function mountDutyTab(container, setHeaderTitle) {
   await showList(container, setHeaderTitle);
+}
+
+function openMovementTypePicker(container, setHeaderTitle) {
+  const overlay = el("div", { class: "overlay" });
+  const closeButton = el("button", {
+    class: "icon-btn",
+    type: "button",
+    "aria-label": "Close movement selection",
+    onclick: () => overlay.remove(),
+  }, "×");
+
+  const departureButton = el("button", {
+    class: "primary-btn",
+    type: "button",
+    style: "width:100%;",
+    onclick: async () => {
+      overlay.remove();
+      const entry = newDutyEntry();
+      entry.movementType = "departure";
+      await DB.put("dutyEntries", entry);
+      showForm(container, setHeaderTitle, entry.id);
+    },
+  }, "Departure Movement");
+
+  const arrivalButton = el("button", {
+    class: "secondary-btn",
+    type: "button",
+    style: "width:100%;",
+    onclick: () => {
+      overlay.remove();
+      showToast("Arrival Movement form will be added later.");
+    },
+  }, "Arrival Movement");
+
+  const card = el("div", { class: "overlay-card" }, [
+    el("div", { style: "display:flex;align-items:center;justify-content:space-between;gap:12px;" }, [
+      el("h2", {}, "Add Movement"),
+      closeButton,
+    ]),
+    el("p", {}, "Choose the movement record you want to add."),
+    el("div", { style: "display:grid;gap:10px;margin-top:14px;" }, [departureButton, arrivalButton]),
+  ]);
+
+  overlay.appendChild(card);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
 }
 
 async function showList(container, setHeaderTitle) {
@@ -128,11 +177,11 @@ async function showList(container, setHeaderTitle) {
   searchInput.oninput = applyFilterAndRender;
   renderRows(allEntries);
 
-  const fab = el("button", { class: "fab", onclick: async () => {
-    const entry = newDutyEntry();
-    await DB.put("dutyEntries", entry);
-    showForm(container, setHeaderTitle, entry.id);
-  } }, "+");
+  const fab = el("button", {
+    class: "fab",
+    "aria-label": "Add movement",
+    onclick: () => openMovementTypePicker(container, setHeaderTitle),
+  }, "+");
   container.appendChild(fab);
 }
 
