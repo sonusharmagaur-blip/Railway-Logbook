@@ -204,11 +204,78 @@ html, body {
 .additional-cab-pt-grid { margin-top: 10px; }
 .add-loco-row { border-top: 1px solid var(--border); padding: 10px 14px; }
 .add-loco-btn { width: 100%; font-weight: 600; }
+.schedule-fields-grid {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+.major-schedule-fields { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
+.minor-schedule-fields {
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.38fr) minmax(0, 0.8fr);
+  padding: 0;
+  border-top: none;
+}
+.schedule-field { min-width: 0; }
+.schedule-field label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.schedule-field input,
+.schedule-field select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+  color: var(--text);
+  width: 100%;
+  min-width: 0;
+}
+.schedule-alert {
+  margin: 0 14px 12px;
+  padding: 9px 10px;
+  border: 1px solid #efb4ac;
+  border-radius: 8px;
+  background: #fff0ee;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+.minor-schedule-card {
+  border-top: 1px solid var(--border);
+  padding: 10px 14px 12px;
+}
+.minor-schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.minor-schedule-title { color: var(--maroon); font-size: 12px; font-weight: 700; }
+.schedule-inline-alert {
+  color: var(--danger);
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.schedule-field input.input-alert {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: #fff0ee;
+}
 
 @media (max-width: 360px) {
   .locomotive-fields { gap: 5px; }
   .locomotive-field input,
   .locomotive-field select { font-size: 13px !important; padding-left: 6px !important; padding-right: 6px !important; }
+  .minor-schedule-fields { gap: 5px; }
+  .schedule-field input,
+  .schedule-field select { font-size: 12px; padding-left: 5px; padding-right: 5px; }
 }
 
 .time-row {
