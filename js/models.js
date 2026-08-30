@@ -36,6 +36,13 @@ export const HOG_MAKE_OPTIONS = ["SIEMENS", "MEDHA", "BHEL", "ABB", "CG", "ALL",
 export const HOG_STATUS_OPTIONS = ["WKG", "Not WKG", "HOG-1 Faulty", "HOG-2 Faulty"];
 export const COMPONENT_UIC_OPTIONS = ["Modified", "Normal"];
 export const CABLE_CONNECTED_OPTIONS = ["2 Cables", "1 Cable", "HOG Not Connected"];
+export const FITTED_OPTIONS = ["Fitted", "Not Fitted"];
+export const RTIS_COMPONENT_STATUS_OPTIONS = ["Working", "Display Defective", "MCB Trip"];
+export const AC_COMPONENT_STATUS_OPTIONS = ["Working", "Cab 1 NW", "Cab 2 NW"];
+export const KAVACH_MAKE_OPTIONS = ["HBL", "KERNEX", "MEDHA", "Not Fitted"];
+export const KAVACH_STATUS_OPTIONS = ["In Service", "OFF"];
+export const BRAKE_SYSTEM_OPTIONS = ["E70", "CCB 2.0", "CCB 1.5"];
+export const SPM_MAKE_OPTIONS = ["MEDHA", "TELPRO", "LAXVEN", "Other"];
 
 // Default schedule types seeded on first launch. User can add more from Settings.
 export const DEFAULT_SCHEDULE_TYPES = ["IA", "IB", "IC", "IOH", "POH", "MOH", "TI"];
@@ -99,10 +106,8 @@ export function newDutyEntry() {
     locomotivePTType: PT_TYPE_OPTIONS[0],
     additionalLocomotives: [],
     remarks: "",
-    acStatus: ACStatus.WORKING,
     uicStatus: UICStatus.NORMAL,
     uicCableOption: null,
-    rtisStatus: RTISStatus.WORKING,
     majorScheduleTypeCode: MAJOR_SCHEDULE_OPTIONS[0],
     majorScheduleDate: null,
     minorSchedules: [newMinorSchedule()],
@@ -116,6 +121,29 @@ export function newDutyEntry() {
     hogMakeOther: "",
     hogStatus: HOG_STATUS_OPTIONS[0],
     uicCableConnected: CABLE_CONNECTED_OPTIONS[0],
+    rtisFitted: FITTED_OPTIONS[0],
+    rtisStatus: RTIS_COMPONENT_STATUS_OPTIONS[0],
+    acFitted: FITTED_OPTIONS[0],
+    acStatus: AC_COMPONENT_STATUS_OPTIONS[0],
+    kavachMake: KAVACH_MAKE_OPTIONS[0],
+    kavachStatus: KAVACH_STATUS_OPTIONS[0],
+    brakeSystem: BRAKE_SYSTEM_OPTIONS[0],
+    spmMake: SPM_MAKE_OPTIONS[0],
+    spmMakeOther: "",
+    mcStatus: "",
+    ubaDjOpen: "",
+    ubaDjClosed: "",
+    spareItems: {
+      bp: false,
+      fp: false,
+      sc: false,
+      tsc: false,
+      fourWw: false,
+      fireExt: false,
+      ptFuse: false,
+      other: false,
+      otherText: "",
+    },
     lastModified: now,
   };
   for (const step of TIMELINE_STEPS) {

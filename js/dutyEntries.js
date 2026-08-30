@@ -1,11 +1,12 @@
 import { DB } from "./db.js";
 import {
   newDutyEntry, TIMELINE_STEPS,
-  AC_STATUS_OPTIONS, RTIS_STATUS_OPTIONS,
   ACStatus, UICStatus, LOCOMOTIVE_TYPE_OPTIONS, CAB_OPTIONS,
   PT_TYPE_OPTIONS, MAJOR_SCHEDULE_OPTIONS, MINOR_SCHEDULE_TYPE_OPTIONS,
   SR_BUR_MAKE_OPTIONS, HOG_MAKE_OPTIONS, HOG_STATUS_OPTIONS,
   COMPONENT_UIC_OPTIONS, CABLE_CONNECTED_OPTIONS,
+  FITTED_OPTIONS, RTIS_COMPONENT_STATUS_OPTIONS, AC_COMPONENT_STATUS_OPTIONS,
+  KAVACH_MAKE_OPTIONS, KAVACH_STATUS_OPTIONS, BRAKE_SYSTEM_OPTIONS, SPM_MAKE_OPTIONS,
   newAdditionalLocomotive, newMinorSchedule, UICCableOption,
 } from "./models.js";
 import { AutosaveController, wireLifecycleFlush } from "./autosave.js";
@@ -29,12 +30,25 @@ function isEntryEmpty(entry) {
     schedule.date || schedule.km !== null && schedule.km !== undefined ||
     (schedule.type && schedule.type !== MINOR_SCHEDULE_TYPE_OPTIONS[0])
   )) return false;
-  if (entry.srMakeOther || entry.burMakeOther || entry.hogMakeOther) return false;
+  if (entry.srMakeOther || entry.burMakeOther || entry.hogMakeOther || entry.spmMakeOther) return false;
   if (entry.srMake && entry.srMake !== SR_BUR_MAKE_OPTIONS[0]) return false;
   if (entry.burMake && entry.burMake !== SR_BUR_MAKE_OPTIONS[0]) return false;
   if (entry.hogMake && entry.hogMake !== HOG_MAKE_OPTIONS[0]) return false;
   if (entry.hogStatus && entry.hogStatus !== HOG_STATUS_OPTIONS[0]) return false;
   if (entry.uicCableConnected && entry.uicCableConnected !== CABLE_CONNECTED_OPTIONS[0]) return false;
+  if (entry.rtisFitted && entry.rtisFitted !== FITTED_OPTIONS[0]) return false;
+  if (entry.rtisStatus && entry.rtisStatus !== RTIS_COMPONENT_STATUS_OPTIONS[0]) return false;
+  if (entry.acFitted && entry.acFitted !== FITTED_OPTIONS[0]) return false;
+  if (entry.acStatus && entry.acStatus !== AC_COMPONENT_STATUS_OPTIONS[0]) return false;
+  if (entry.kavachMake && entry.kavachMake !== KAVACH_MAKE_OPTIONS[0]) return false;
+  if (entry.kavachStatus && entry.kavachStatus !== KAVACH_STATUS_OPTIONS[0]) return false;
+  if (entry.brakeSystem && entry.brakeSystem !== BRAKE_SYSTEM_OPTIONS[0]) return false;
+  if (entry.spmMake && entry.spmMake !== SPM_MAKE_OPTIONS[0]) return false;
+  if (entry.mcStatus || entry.ubaDjOpen || entry.ubaDjClosed) return false;
+  if (entry.spareItems && (
+    entry.spareItems.otherText ||
+    Object.entries(entry.spareItems).some(([key, value]) => key !== "otherText" && value === true)
+  )) return false;
   for (const step of TIMELINE_STEPS) {
     if (entry[step.key]) return false;
   }
@@ -241,6 +255,23 @@ async function showForm(container, setHeaderTitle, entryId) {
   if (entry.srMakeOther === undefined) entry.srMakeOther = "";
   if (entry.burMakeOther === undefined) entry.burMakeOther = "";
   if (entry.hogMakeOther === undefined) entry.hogMakeOther = "";
+  if (!FITTED_OPTIONS.includes(entry.rtisFitted)) entry.rtisFitted = FITTED_OPTIONS[0];
+  if (!RTIS_COMPONENT_STATUS_OPTIONS.includes(entry.rtisStatus)) entry.rtisStatus = RTIS_COMPONENT_STATUS_OPTIONS[0];
+  if (!FITTED_OPTIONS.includes(entry.acFitted)) entry.acFitted = FITTED_OPTIONS[0];
+  if (!AC_COMPONENT_STATUS_OPTIONS.includes(entry.acStatus)) entry.acStatus = AC_COMPONENT_STATUS_OPTIONS[0];
+  if (!KAVACH_MAKE_OPTIONS.includes(entry.kavachMake)) entry.kavachMake = KAVACH_MAKE_OPTIONS[0];
+  if (!KAVACH_STATUS_OPTIONS.includes(entry.kavachStatus)) entry.kavachStatus = KAVACH_STATUS_OPTIONS[0];
+  if (!BRAKE_SYSTEM_OPTIONS.includes(entry.brakeSystem)) entry.brakeSystem = BRAKE_SYSTEM_OPTIONS[0];
+  if (!SPM_MAKE_OPTIONS.includes(entry.spmMake)) entry.spmMake = SPM_MAKE_OPTIONS[0];
+  if (entry.spmMakeOther === undefined) entry.spmMakeOther = "";
+  if (entry.mcStatus === undefined) entry.mcStatus = "";
+  if (entry.ubaDjOpen === undefined) entry.ubaDjOpen = "";
+  if (entry.ubaDjClosed === undefined) entry.ubaDjClosed = "";
+  const spareItemDefaults = {
+    bp: false, fp: false, sc: false, tsc: false, fourWw: false,
+    fireExt: false, ptFuse: false, other: false, otherText: "",
+  };
+  entry.spareItems = { ...spareItemDefaults, ...(entry.spareItems || {}) };
   if (!MAJOR_SCHEDULE_OPTIONS.includes(entry.majorScheduleTypeCode)) entry.majorScheduleTypeCode = MAJOR_SCHEDULE_OPTIONS[0];
   if (!Array.isArray(entry.minorSchedules)) {
     const migratedSchedule = newMinorSchedule();
@@ -814,6 +845,109 @@ async function showForm(container, setHeaderTitle, entryId) {
   ]));
   componentSection.appendChild(uicCableComponentRow);
   renderHogDependentFields();
+
+  function createComponentDropdownField(label, fieldKey, options) {
+    return el("div", { class: "schedule-field component-field" }, [
+      el("label", {}, label),
+      createDropdown(options, entry[fieldKey], (value) => {
+        entry[fieldKey] = value;
+        onFieldChange();
+      }, { "aria-label": label }),
+    ]);
+  }
+
+  function createManualComponentField(label, fieldKey) {
+    return el("div", { class: "schedule-field component-field" }, [
+      el("label", {}, label),
+      el("input", {
+        type: "text",
+        value: entry[fieldKey] || "",
+        "aria-label": label,
+        oninput: (event) => {
+          entry[fieldKey] = event.target.value;
+          onFieldChange();
+        },
+      }),
+    ]);
+  }
+
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
+    createComponentDropdownField("RTIS", "rtisFitted", FITTED_OPTIONS),
+    createComponentDropdownField("RTIS Status", "rtisStatus", RTIS_COMPONENT_STATUS_OPTIONS),
+  ]));
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
+    createComponentDropdownField("AC", "acFitted", FITTED_OPTIONS),
+    createComponentDropdownField("AC Status", "acStatus", AC_COMPONENT_STATUS_OPTIONS),
+  ]));
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
+    createComponentDropdownField("KAVACH Make", "kavachMake", KAVACH_MAKE_OPTIONS),
+    createComponentDropdownField("KAVACH Status", "kavachStatus", KAVACH_STATUS_OPTIONS),
+  ]));
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
+    createComponentDropdownField("Brake System", "brakeSystem", BRAKE_SYSTEM_OPTIONS),
+    createMakeField("SPM Make", "spmMake", "spmMakeOther", SPM_MAKE_OPTIONS),
+  ]));
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid component-details-row single-component-row" }, [
+    createManualComponentField("MC Status", "mcStatus"),
+  ]));
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
+    createManualComponentField("UBA DJ OPEN", "ubaDjOpen"),
+    createManualComponentField("UBA DJ CLOSED", "ubaDjClosed"),
+  ]));
+
+  const spareItems = [
+    ["bp", "BP"],
+    ["fp", "FP"],
+    ["sc", "SC"],
+    ["tsc", "TSC"],
+    ["fourWw", "4WW"],
+    ["fireExt", "2+2 Fire Ext."],
+    ["ptFuse", "2 PT-Fuse"],
+    ["other", "Other"],
+  ];
+  const spareChecklist = el("div", { class: "spare-items-grid" });
+  const spareOtherInput = el("input", {
+    class: "spare-other-input",
+    type: "text",
+    value: entry.spareItems.otherText || "",
+    placeholder: "Enter other spare item",
+    "aria-label": "Other spare item",
+    oninput: (event) => {
+      entry.spareItems.otherText = event.target.value;
+      onFieldChange();
+    },
+  });
+
+  function renderSpareOtherInput() {
+    spareOtherInput.classList.toggle("hidden", !entry.spareItems.other);
+  }
+
+  for (const [key, label] of spareItems) {
+    const itemName = el("span", { class: "spare-item-name" }, label);
+    const checkbox = el("input", {
+      type: "checkbox",
+      "aria-label": `${label} available`,
+      onchange: (event) => {
+        entry.spareItems[key] = event.target.checked;
+        itemLabel.classList.toggle("is-available", event.target.checked);
+        if (key === "other") renderSpareOtherInput();
+        onFieldChange();
+      },
+    });
+    checkbox.checked = Boolean(entry.spareItems[key]);
+    const itemLabel = el("label", {
+      class: `spare-item-check${entry.spareItems[key] ? " is-available" : ""}`,
+    }, [checkbox, itemName]);
+    spareChecklist.appendChild(itemLabel);
+  }
+  renderSpareOtherInput();
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid component-details-row single-component-row" }, [
+    el("div", { class: "schedule-field component-field spare-items-field" }, [
+      el("label", {}, "Spare Items Available"),
+      spareChecklist,
+      spareOtherInput,
+    ]),
+  ]));
   trainLocoPage.appendChild(componentSection);
 
   trainLocoPage.appendChild(el("button", {
@@ -838,19 +972,6 @@ async function showForm(container, setHeaderTitle, entryId) {
     }
   }
   remainingDetailsPage.appendChild(timelineSection);
-
-  // --- Status Checks ---
-  const statusSection = el("div", { class: "form-section" });
-  statusSection.appendChild(el("div", { class: "form-section-title" }, "Status Checks"));
-  statusSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "AC"),
-    createDropdown(AC_STATUS_OPTIONS, entry.acStatus, (v) => { entry.acStatus = v; onFieldChange(); }),
-  ]));
-  statusSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "RTIS"),
-    createDropdown(RTIS_STATUS_OPTIONS, entry.rtisStatus, (v) => { entry.rtisStatus = v; onFieldChange(); }),
-  ]));
-  remainingDetailsPage.appendChild(statusSection);
 
   // --- Remarks ---
   const remarksSection = el("div", { class: "form-section" });
