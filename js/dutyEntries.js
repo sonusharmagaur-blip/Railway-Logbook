@@ -1,10 +1,12 @@
 import { DB } from "./db.js";
 import {
   newDutyEntry, TIMELINE_STEPS,
-  AC_STATUS_OPTIONS, UIC_STATUS_OPTIONS, UIC_CABLE_OPTIONS, RTIS_STATUS_OPTIONS,
+  AC_STATUS_OPTIONS, RTIS_STATUS_OPTIONS,
   ACStatus, UICStatus, LOCOMOTIVE_TYPE_OPTIONS, CAB_OPTIONS,
   PT_TYPE_OPTIONS, MAJOR_SCHEDULE_OPTIONS, MINOR_SCHEDULE_TYPE_OPTIONS,
-  newAdditionalLocomotive, newMinorSchedule,
+  SR_BUR_MAKE_OPTIONS, HOG_MAKE_OPTIONS, HOG_STATUS_OPTIONS,
+  COMPONENT_UIC_OPTIONS, CABLE_CONNECTED_OPTIONS,
+  newAdditionalLocomotive, newMinorSchedule, UICCableOption,
 } from "./models.js";
 import { AutosaveController, wireLifecycleFlush } from "./autosave.js";
 import { el, formatDate, formatTime, createTimeField, createDropdown, todayDateInputValue } from "./util.js";
@@ -27,6 +29,12 @@ function isEntryEmpty(entry) {
     schedule.date || schedule.km !== null && schedule.km !== undefined ||
     (schedule.type && schedule.type !== MINOR_SCHEDULE_TYPE_OPTIONS[0])
   )) return false;
+  if (entry.srMakeOther || entry.burMakeOther || entry.hogMakeOther) return false;
+  if (entry.srMake && entry.srMake !== SR_BUR_MAKE_OPTIONS[0]) return false;
+  if (entry.burMake && entry.burMake !== SR_BUR_MAKE_OPTIONS[0]) return false;
+  if (entry.hogMake && entry.hogMake !== HOG_MAKE_OPTIONS[0]) return false;
+  if (entry.hogStatus && entry.hogStatus !== HOG_STATUS_OPTIONS[0]) return false;
+  if (entry.uicCableConnected && entry.uicCableConnected !== CABLE_CONNECTED_OPTIONS[0]) return false;
   for (const step of TIMELINE_STEPS) {
     if (entry[step.key]) return false;
   }
@@ -219,6 +227,19 @@ async function showForm(container, setHeaderTitle, entryId) {
   let entry = await DB.get("dutyEntries", entryId);
   if (!entry.locomotivePTType) entry.locomotivePTType = PT_TYPE_OPTIONS[0];
   if (!Array.isArray(entry.additionalLocomotives)) entry.additionalLocomotives = [];
+  if (!SR_BUR_MAKE_OPTIONS.includes(entry.srMake)) entry.srMake = SR_BUR_MAKE_OPTIONS[0];
+  if (!SR_BUR_MAKE_OPTIONS.includes(entry.burMake)) entry.burMake = SR_BUR_MAKE_OPTIONS[0];
+  if (!HOG_MAKE_OPTIONS.includes(entry.hogMake)) entry.hogMake = HOG_MAKE_OPTIONS[0];
+  if (!HOG_STATUS_OPTIONS.includes(entry.hogStatus)) entry.hogStatus = HOG_STATUS_OPTIONS[0];
+  if (!COMPONENT_UIC_OPTIONS.includes(entry.uicStatus)) entry.uicStatus = "Normal";
+  if (!CABLE_CONNECTED_OPTIONS.includes(entry.uicCableConnected)) {
+    if (entry.uicCableOption === UICCableOption.ONE_CABLE) entry.uicCableConnected = "1 Cable";
+    else if (entry.uicCableOption === UICCableOption.BOTH_CABLE) entry.uicCableConnected = "2 Cables";
+    else entry.uicCableConnected = CABLE_CONNECTED_OPTIONS[0];
+  }
+  if (entry.srMakeOther === undefined) entry.srMakeOther = "";
+  if (entry.burMakeOther === undefined) entry.burMakeOther = "";
+  if (entry.hogMakeOther === undefined) entry.hogMakeOther = "";
   if (!MAJOR_SCHEDULE_OPTIONS.includes(entry.majorScheduleTypeCode)) entry.majorScheduleTypeCode = MAJOR_SCHEDULE_OPTIONS[0];
   if (!Array.isArray(entry.minorSchedules)) {
     const migratedSchedule = newMinorSchedule();
@@ -700,6 +721,80 @@ async function showForm(container, setHeaderTitle, entryId) {
   renderMinorSchedules();
   trainLocoPage.appendChild(minorScheduleSection);
 
+  // --- Loco Components Details ---
+  const componentSection = el("div", { class: "form-section" });
+  componentSection.appendChild(el("div", { class: "form-section-title" }, "Loco Components Details"));
+
+  function createMakeField(label, fieldKey, otherFieldKey, options) {
+    const manualInput = el("input", {
+      type: "text",
+      value: entry[otherFieldKey] || "",
+      placeholder: `Enter ${label}`,
+      "aria-label": `${label} manual entry`,
+      oninput: (event) => {
+        entry[otherFieldKey] = event.target.value;
+        onFieldChange();
+      },
+    });
+
+    function renderManualInput() {
+      manualInput.classList.toggle("hidden", entry[fieldKey] !== "Other");
+    }
+
+    const select = createDropdown(options, entry[fieldKey], (value) => {
+      entry[fieldKey] = value;
+      renderManualInput();
+      onFieldChange();
+    }, { "aria-label": label });
+    renderManualInput();
+
+    return el("div", { class: "schedule-field component-field" }, [
+      el("label", {}, label),
+      select,
+      manualInput,
+    ]);
+  }
+
+  function syncLegacyCableValue(value) {
+    if (value === "1 Cable") entry.uicCableOption = UICCableOption.ONE_CABLE;
+    else if (value === "2 Cables") entry.uicCableOption = UICCableOption.BOTH_CABLE;
+    else entry.uicCableOption = null;
+  }
+
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
+    createMakeField("SR Make", "srMake", "srMakeOther", SR_BUR_MAKE_OPTIONS),
+    createMakeField("BUR Make", "burMake", "burMakeOther", SR_BUR_MAKE_OPTIONS),
+  ]));
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
+    createMakeField("HOG Make", "hogMake", "hogMakeOther", HOG_MAKE_OPTIONS),
+    el("div", { class: "schedule-field component-field" }, [
+      el("label", {}, "HOG Status"),
+      createDropdown(HOG_STATUS_OPTIONS, entry.hogStatus, (value) => {
+        entry.hogStatus = value;
+        onFieldChange();
+      }, { "aria-label": "HOG status" }),
+    ]),
+  ]));
+  componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
+    el("div", { class: "schedule-field component-field" }, [
+      el("label", {}, "UIC"),
+      createDropdown(COMPONENT_UIC_OPTIONS, entry.uicStatus, (value) => {
+        entry.uicStatus = value;
+        onFieldChange();
+      }, { "aria-label": "UIC status" }),
+    ]),
+    el("div", { class: "schedule-field component-field" }, [
+      el("label", {}, "Cable Connected"),
+      createDropdown(CABLE_CONNECTED_OPTIONS, entry.uicCableConnected, (value) => {
+        entry.uicCableConnected = value;
+        syncLegacyCableValue(value);
+        onFieldChange();
+      }, { "aria-label": "Cable connected" }),
+    ]),
+  ]));
+  syncLegacyCableValue(entry.uicCableConnected);
+  trainLocoPage.appendChild(componentSection);
+
   trainLocoPage.appendChild(el("button", {
     class: "primary-btn",
     type: "button",
@@ -730,26 +825,6 @@ async function showForm(container, setHeaderTitle, entryId) {
     el("label", {}, "AC"),
     createDropdown(AC_STATUS_OPTIONS, entry.acStatus, (v) => { entry.acStatus = v; onFieldChange(); }),
   ]));
-  const uicRow = el("div", { class: "form-row" });
-  uicRow.appendChild(el("label", {}, "UIC"));
-  const uicCableRowHolder = el("div", {});
-  function renderUicCableRow() {
-    uicCableRowHolder.innerHTML = "";
-    if (entry.uicStatus === UICStatus.MODIFIED) {
-      uicCableRowHolder.appendChild(el("div", { class: "form-row" }, [
-        el("label", {}, "Cable"),
-        createDropdown(UIC_CABLE_OPTIONS, entry.uicCableOption || UIC_CABLE_OPTIONS[0], (v) => { entry.uicCableOption = v; onFieldChange(); }),
-      ]));
-      if (!entry.uicCableOption) { entry.uicCableOption = UIC_CABLE_OPTIONS[0]; onFieldChange(); }
-    } else if (entry.uicCableOption) {
-      entry.uicCableOption = null;
-      onFieldChange();
-    }
-  }
-  uicRow.appendChild(createDropdown(UIC_STATUS_OPTIONS, entry.uicStatus, (v) => { entry.uicStatus = v; onFieldChange(); renderUicCableRow(); }));
-  statusSection.appendChild(uicRow);
-  statusSection.appendChild(uicCableRowHolder);
-  renderUicCableRow();
   statusSection.appendChild(el("div", { class: "form-row" }, [
     el("label", {}, "RTIS"),
     createDropdown(RTIS_STATUS_OPTIONS, entry.rtisStatus, (v) => { entry.rtisStatus = v; onFieldChange(); }),

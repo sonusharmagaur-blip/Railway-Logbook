@@ -31,6 +31,11 @@ export const CAB_OPTIONS = ["Cab-1", "Cab-2"];
 export const PT_TYPE_OPTIONS = ["Normal", "Both HRP", "PT-1 HRP", "PT-2 HRP"];
 export const MAJOR_SCHEDULE_OPTIONS = ["IA", "IB", "IC", "IOH", "POH", "MOH", "NC Loco"];
 export const MINOR_SCHEDULE_TYPE_OPTIONS = ["TI", "VC", "GC"];
+export const SR_BUR_MAKE_OPTIONS = ["MEDHA", "BT", "ABB", "CG", "SIEMENS", "BHEL", "Other"];
+export const HOG_MAKE_OPTIONS = ["SIEMENS", "MEDHA", "BHEL", "ABB", "CG", "ALL", "Other"];
+export const HOG_STATUS_OPTIONS = ["WKG", "Not WKG", "HOG-1 Faulty", "HOG-2 Faulty"];
+export const COMPONENT_UIC_OPTIONS = ["Modified", "Normal"];
+export const CABLE_CONNECTED_OPTIONS = ["2 Cables", "1 Cable", "HOG Not Connected"];
 
 // Default schedule types seeded on first launch. User can add more from Settings.
 export const DEFAULT_SCHEDULE_TYPES = ["IA", "IB", "IC", "IOH", "POH", "MOH", "TI"];
@@ -103,6 +108,14 @@ export function newDutyEntry() {
     minorSchedules: [newMinorSchedule()],
     minorScheduleTIDate: null,
     kmSinceLastSchedule: null,
+    srMake: SR_BUR_MAKE_OPTIONS[0],
+    srMakeOther: "",
+    burMake: SR_BUR_MAKE_OPTIONS[0],
+    burMakeOther: "",
+    hogMake: HOG_MAKE_OPTIONS[0],
+    hogMakeOther: "",
+    hogStatus: HOG_STATUS_OPTIONS[0],
+    uicCableConnected: CABLE_CONNECTED_OPTIONS[0],
     lastModified: now,
   };
   for (const step of TIMELINE_STEPS) {
