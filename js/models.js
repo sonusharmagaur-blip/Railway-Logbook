@@ -43,26 +43,38 @@ export const KAVACH_MAKE_OPTIONS = ["HBL", "KERNEX", "MEDHA", "Not Fitted"];
 export const KAVACH_STATUS_OPTIONS = ["In Service", "OFF"];
 export const BRAKE_SYSTEM_OPTIONS = ["E70", "CCB 2.0", "CCB 1.5"];
 export const SPM_MAKE_OPTIONS = ["MEDHA", "TELPRO", "LAXVEN", "Other"];
+export const LOCO_OFFER_PLACE_OPTIONS = ["SH-329", "SH-306", "SH-182", "SH-184", "SH-307", "Other"];
+export const BP_FP_PLACE_OPTIONS = ["Yard", "PF", "Other"];
 
 // Default schedule types seeded on first launch. User can add more from Settings.
 export const DEFAULT_SCHEDULE_TYPES = ["IA", "IB", "IC", "IOH", "POH", "MOH", "TI"];
 
-// The 10 timeline-of-working steps, in display order. Each is a Date-or-null (ISO string) field on DutyEntry.
+// Time fields used by the structured Movement Details section and exports.
 export const TIMELINE_STEPS = [
   { key: "locoTakeoverTime", label: "Loco Takeover" },
+  { key: "locoCheckedUptoTime", label: "Checked Upto" },
   { key: "locoOfferTime", label: "Loco Offer" },
+  { key: "locoOfferDepartureTime", label: "Offer Departure" },
   { key: "engineOnTrainTime", label: "Engine on Train" },
-  { key: "hogAttachedTime", label: "HOG Attached" },
-  { key: "bpFpTime", label: "BP/FP" },
-  { key: "buildupTime", label: "Buildup" }, // paired with buildupLocation text field
+  { key: "hogAttachedTime", label: "HOG Attached From" },
+  { key: "hogAttachedToTime", label: "HOG Attached To" },
+  { key: "bpFpTime", label: "BP/FP Buildup" },
+  { key: "departureTime", label: "Yard Departure" },
+  { key: "placementTime", label: "Placement" },
   { key: "continuityTime", label: "Continuity" },
   { key: "bpcTime", label: "BPC" },
   { key: "madeOverChargeTime", label: "Made Over Charge" },
-  { key: "departureTime", label: "Departure" },
 ];
 
 function uuid() {
   return crypto.randomUUID();
+}
+
+function localDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function newLocomotive() {
@@ -94,8 +106,10 @@ export function newDutyEntry() {
   const now = new Date().toISOString();
   const entry = {
     id: uuid(),
-    date: new Date().toISOString().slice(0, 10), // yyyy-mm-dd
+    date: localDateInputValue(), // yyyy-mm-dd in the device's local timezone
     movementType: "departure",
+    isDraft: true,
+    draftPage: 1,
     trainNumber: "",
     trainName: "",
     locomotiveId: null,
@@ -144,12 +158,26 @@ export function newDutyEntry() {
       other: false,
       otherText: "",
     },
+    locoTakeoverPlace: "",
+    locoOfferPlace: LOCO_OFFER_PLACE_OPTIONS[0],
+    locoOfferPlaceOther: "",
+    engineOnTrainPlace: "",
+    hogAttachedPlace: "",
+    bpFpPlace: BP_FP_PLACE_OPTIONS[0],
+    bpFpPlaceOther: "",
+    yardSignal: "",
+    privateDetailsEnabled: false,
+    privateNumber: "",
+    yardMasterName: "",
+    pmName: "",
+    placementPfNumber: "",
+    madeOverChargeName: "",
+    madeOverChargeHQ: "",
     lastModified: now,
   };
   for (const step of TIMELINE_STEPS) {
     entry[step.key] = null;
   }
-  entry.buildupLocation = "";
   return entry;
 }
 

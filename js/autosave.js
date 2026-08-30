@@ -1,9 +1,9 @@
 // Generic debounce + flush autosave controller.
-// Every field edit calls fieldChanged(); a save fires ~400ms after the last edit.
+// Every field edit calls fieldChanged(); a save fires almost immediately.
 // flush() saves immediately (uncancelled) and is wired to page-hide/visibility-change
 // events so an in-progress edit is never lost even if the debounce hasn't fired yet.
 
-const DEBOUNCE_MS = 400;
+const DEBOUNCE_MS = 100;
 
 export class AutosaveController {
   constructor(saveFn) {
@@ -46,12 +46,13 @@ export class AutosaveController {
 // switches away or closes the tab/app — the web equivalent of app backgrounding.
 export function wireLifecycleFlush(controller) {
   const flush = () => controller.flush();
-  document.addEventListener("visibilitychange", () => {
+  const onVisibilityChange = () => {
     if (document.visibilityState === "hidden") flush();
-  });
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
   window.addEventListener("pagehide", flush);
   return () => {
-    document.removeEventListener("visibilitychange", flush);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
     window.removeEventListener("pagehide", flush);
   };
 }

@@ -7,6 +7,7 @@ import {
   COMPONENT_UIC_OPTIONS, CABLE_CONNECTED_OPTIONS,
   FITTED_OPTIONS, RTIS_COMPONENT_STATUS_OPTIONS, AC_COMPONENT_STATUS_OPTIONS,
   KAVACH_MAKE_OPTIONS, KAVACH_STATUS_OPTIONS, BRAKE_SYSTEM_OPTIONS, SPM_MAKE_OPTIONS,
+  LOCO_OFFER_PLACE_OPTIONS, BP_FP_PLACE_OPTIONS,
   newAdditionalLocomotive, newMinorSchedule, UICCableOption,
 } from "./models.js";
 import { AutosaveController, wireLifecycleFlush } from "./autosave.js";
@@ -16,6 +17,7 @@ import { openRangeReport } from "./rangeReport.js";
 import { showToast } from "./toast.js";
 
 let currentUnwireLifecycle = null;
+let resumePromptDismissedForSession = false;
 
 function isEntryEmpty(entry) {
   if (entry.trainNumber || entry.trainName || entry.remarks) return false;
@@ -45,6 +47,11 @@ function isEntryEmpty(entry) {
   if (entry.brakeSystem && entry.brakeSystem !== BRAKE_SYSTEM_OPTIONS[0]) return false;
   if (entry.spmMake && entry.spmMake !== SPM_MAKE_OPTIONS[0]) return false;
   if (entry.mcStatus || entry.ubaDjOpen || entry.ubaDjClosed) return false;
+  if (entry.locoTakeoverPlace || entry.locoOfferPlaceOther || entry.engineOnTrainPlace || entry.hogAttachedPlace) return false;
+  if (entry.locoOfferPlace && entry.locoOfferPlace !== LOCO_OFFER_PLACE_OPTIONS[0]) return false;
+  if (entry.bpFpPlace && entry.bpFpPlace !== BP_FP_PLACE_OPTIONS[0]) return false;
+  if (entry.bpFpPlaceOther || entry.yardSignal || entry.privateNumber || entry.yardMasterName || entry.pmName) return false;
+  if (entry.placementPfNumber || entry.madeOverChargeName || entry.madeOverChargeHQ) return false;
   if (entry.spareItems && (
     entry.spareItems.otherText ||
     Object.entries(entry.spareItems).some(([key, value]) => key !== "otherText" && value === true)
@@ -109,7 +116,51 @@ function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
 }
 
 export async function mountDutyTab(container, setHeaderTitle) {
+  const entries = await DB.getAll("dutyEntries");
+  const activeDraft = entries
+    .filter((entry) => entry.isDraft === true && !isEntryEmpty(entry))
+    .sort((a, b) => (b.lastModified || "").localeCompare(a.lastModified || ""))[0];
   await showList(container, setHeaderTitle);
+  if (activeDraft && !resumePromptDismissedForSession) {
+    openResumeDraftPrompt(container, setHeaderTitle, activeDraft);
+  }
+}
+
+function openResumeDraftPrompt(container, setHeaderTitle, entry) {
+  const overlay = el("div", { class: "overlay" });
+  const movementLabel = entry.movementType === "arrival" ? "Arrival Movement" : "Departure Movement";
+  const recordDetails = [
+    movementLabel,
+    entry.trainNumber ? `Train ${entry.trainNumber}` : null,
+    entry.locomotiveNumberSnapshot ? `Loco ${entry.locomotiveNumberSnapshot}` : null,
+  ].filter(Boolean).join(" · ");
+
+  const resumeButton = el("button", {
+    class: "primary-btn",
+    type: "button",
+    style: "width:100%;",
+    onclick: () => {
+      overlay.remove();
+      showForm(container, setHeaderTitle, entry.id);
+    },
+  }, "Resume Pending Movement");
+  const notNowButton = el("button", {
+    class: "secondary-btn",
+    type: "button",
+    style: "width:100%;",
+    onclick: () => {
+      resumePromptDismissedForSession = true;
+      overlay.remove();
+    },
+  }, "Not Now");
+
+  overlay.appendChild(el("div", { class: "overlay-card" }, [
+    el("h2", {}, "Unfinished Movement Found"),
+    el("p", {}, "Your last unfinished form is safely saved on this device."),
+    el("div", { style: "margin:12px 0;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--cream);font-weight:600;" }, recordDetails),
+    el("div", { style: "display:grid;gap:10px;" }, [resumeButton, notNowButton]),
+  ]));
+  document.body.appendChild(overlay);
 }
 
 function openMovementTypePicker(container, setHeaderTitle) {
@@ -138,9 +189,12 @@ function openMovementTypePicker(container, setHeaderTitle) {
     class: "secondary-btn",
     type: "button",
     style: "width:100%;",
-    onclick: () => {
+    onclick: async () => {
       overlay.remove();
-      showToast("Arrival Movement form will be added later.");
+      const entry = newDutyEntry();
+      entry.movementType = "arrival";
+      await DB.put("dutyEntries", entry);
+      showForm(container, setHeaderTitle, entry.id);
     },
   }, "Arrival Movement");
 
@@ -208,6 +262,7 @@ async function showList(container, setHeaderTitle) {
     }
     for (const entry of entries) {
       const badges = [];
+      if (entry.isDraft === true) badges.push(el("span", { class: "badge warn" }, "Draft"));
       if (entry.acStatus && entry.acStatus !== ACStatus.WORKING) badges.push(el("span", { class: "badge warn" }, "AC"));
       if (entry.uicStatus === UICStatus.MODIFIED) badges.push(el("span", { class: "badge" }, "UIC Modified"));
       const row = el("div", { class: "card list-row", onclick: () => showForm(container, setHeaderTitle, entry.id) }, [
@@ -239,6 +294,11 @@ async function showForm(container, setHeaderTitle, entryId) {
   container.innerHTML = "";
 
   let entry = await DB.get("dutyEntries", entryId);
+  if (!entry) {
+    showList(container, setHeaderTitle);
+    return;
+  }
+  if (entry.draftPage !== 2) entry.draftPage = 1;
   if (!entry.locomotivePTType) entry.locomotivePTType = PT_TYPE_OPTIONS[0];
   if (!Array.isArray(entry.additionalLocomotives)) entry.additionalLocomotives = [];
   if (!SR_BUR_MAKE_OPTIONS.includes(entry.srMake)) entry.srMake = SR_BUR_MAKE_OPTIONS[0];
@@ -272,6 +332,21 @@ async function showForm(container, setHeaderTitle, entryId) {
     fireExt: false, ptFuse: false, other: false, otherText: "",
   };
   entry.spareItems = { ...spareItemDefaults, ...(entry.spareItems || {}) };
+  if (entry.locoTakeoverPlace === undefined) entry.locoTakeoverPlace = "";
+  if (!LOCO_OFFER_PLACE_OPTIONS.includes(entry.locoOfferPlace)) entry.locoOfferPlace = LOCO_OFFER_PLACE_OPTIONS[0];
+  if (entry.locoOfferPlaceOther === undefined) entry.locoOfferPlaceOther = "";
+  if (entry.engineOnTrainPlace === undefined) entry.engineOnTrainPlace = "";
+  if (entry.hogAttachedPlace === undefined) entry.hogAttachedPlace = "";
+  if (!BP_FP_PLACE_OPTIONS.includes(entry.bpFpPlace)) entry.bpFpPlace = BP_FP_PLACE_OPTIONS[0];
+  if (entry.bpFpPlaceOther === undefined) entry.bpFpPlaceOther = "";
+  if (entry.yardSignal === undefined) entry.yardSignal = "";
+  if (entry.privateDetailsEnabled === undefined) entry.privateDetailsEnabled = false;
+  if (entry.privateNumber === undefined) entry.privateNumber = "";
+  if (entry.yardMasterName === undefined) entry.yardMasterName = "";
+  if (entry.pmName === undefined) entry.pmName = "";
+  if (entry.placementPfNumber === undefined) entry.placementPfNumber = "";
+  if (entry.madeOverChargeName === undefined) entry.madeOverChargeName = "";
+  if (entry.madeOverChargeHQ === undefined) entry.madeOverChargeHQ = "";
   if (!MAJOR_SCHEDULE_OPTIONS.includes(entry.majorScheduleTypeCode)) entry.majorScheduleTypeCode = MAJOR_SCHEDULE_OPTIONS[0];
   if (!Array.isArray(entry.minorSchedules)) {
     const migratedSchedule = newMinorSchedule();
@@ -311,10 +386,21 @@ async function showForm(container, setHeaderTitle, entryId) {
     if (isEntryEmpty(entry)) {
       await DB.delete("dutyEntries", entry.id);
     }
+    resumePromptDismissedForSession = true;
+    showList(container, setHeaderTitle);
+  }
+
+  async function finalizeEntry() {
+    entry.isDraft = false;
+    entry.draftPage = 1;
+    await autosave.flush();
+    resumePromptDismissedForSession = true;
+    showToast("Record saved.");
     showList(container, setHeaderTitle);
   }
 
   function onFieldChange() {
+    entry.isDraft = true;
     autosave.fieldChanged();
   }
 
@@ -342,13 +428,17 @@ async function showForm(container, setHeaderTitle, entryId) {
   const trainLocoPage = el("div", {});
   const remainingDetailsPage = el("div", { style: "display:none;" });
 
-  function showDeparturePage(pageNumber) {
+  function showDeparturePage(pageNumber, persistPage = true) {
     const showFirstPage = pageNumber === 1;
     trainLocoPage.style.display = showFirstPage ? "block" : "none";
     remainingDetailsPage.style.display = showFirstPage ? "none" : "block";
     stepHeading.textContent = showFirstPage ? "Train & Loco Details" : "Movement Details";
     stepCount.textContent = showFirstPage ? "Step 1 of 2" : "Step 2 of 2";
     progressFill.style.width = showFirstPage ? "50%" : "100%";
+    if (persistPage && entry.isDraft === true && entry.draftPage !== pageNumber) {
+      entry.draftPage = pageNumber;
+      autosave.fieldChanged();
+    }
     container.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -950,27 +1040,181 @@ async function showForm(container, setHeaderTitle, entryId) {
   ]));
   trainLocoPage.appendChild(componentSection);
 
+  const isArrivalMovement = entry.movementType === "arrival";
   trainLocoPage.appendChild(el("button", {
     class: "primary-btn",
     type: "button",
-    onclick: () => showDeparturePage(2),
-  }, "Next: Movement Details →"));
+    onclick: () => {
+      if (isArrivalMovement) {
+        showToast("Arrival Movement next section will be added later.");
+        return;
+      }
+      showDeparturePage(2);
+    },
+  }, isArrivalMovement ? "Next: Arrival Details →" : "Next: Movement Details →"));
 
   // --- Timeline of Working ---
   const timelineSection = el("div", { class: "form-section" });
   timelineSection.appendChild(el("div", { class: "form-section-title" }, "Timeline of Working"));
-  for (const step of TIMELINE_STEPS) {
-    const row = el("div", { class: "time-row" });
-    row.appendChild(el("div", { class: "time-row-label" }, step.label));
-    row.appendChild(createTimeField(entry.date, entry[step.key], (val) => { entry[step.key] = val; onFieldChange(); }));
-    timelineSection.appendChild(row);
-    if (step.key === "buildupTime") {
-      timelineSection.appendChild(el("div", { class: "form-row" }, [
-        el("label", {}, "Buildup Location"),
-        el("input", { type: "text", value: entry.buildupLocation || "", oninput: (e) => { entry.buildupLocation = e.target.value; onFieldChange(); } }),
-      ]));
-    }
+
+  function recentHistoryValues(fieldKey) {
+    const seen = new Set();
+    return allDutyEntries
+      .filter((candidate) => candidate.id !== entry.id)
+      .sort((a, b) => (b.lastModified || "").localeCompare(a.lastModified || ""))
+      .map((candidate) => String(candidate[fieldKey] || "").trim())
+      .filter((value) => {
+        const normalized = value.toUpperCase();
+        if (!value || seen.has(normalized)) return false;
+        seen.add(normalized);
+        return true;
+      })
+      .slice(0, 12);
   }
+
+  function createMovementTimeField(label, fieldKey) {
+    return el("div", { class: "movement-detail-field" }, [
+      el("label", {}, label),
+      createTimeField(entry.date, entry[fieldKey], (value) => {
+        entry[fieldKey] = value;
+        onFieldChange();
+      }),
+    ]);
+  }
+
+  function createMovementManualField(label, fieldKey, placeholder = "Enter details") {
+    return el("div", { class: "movement-detail-field" }, [
+      el("label", {}, label),
+      el("input", {
+        type: "text",
+        value: entry[fieldKey] || "",
+        placeholder,
+        "aria-label": label,
+        oninput: (event) => {
+          entry[fieldKey] = event.target.value;
+          onFieldChange();
+        },
+      }),
+    ]);
+  }
+
+  function createMovementHistoryField(label, fieldKey, placeholder = "Enter or select recent") {
+    const datalistId = `history-${fieldKey}-${entry.id}`;
+    const datalist = el("datalist", { id: datalistId }, recentHistoryValues(fieldKey).map((value) =>
+      el("option", { value })
+    ));
+    return el("div", { class: "movement-detail-field" }, [
+      el("label", {}, label),
+      el("input", {
+        type: "text",
+        value: entry[fieldKey] || "",
+        placeholder,
+        list: datalistId,
+        autocomplete: "off",
+        "aria-label": label,
+        oninput: (event) => {
+          entry[fieldKey] = event.target.value;
+          onFieldChange();
+        },
+      }),
+      datalist,
+    ]);
+  }
+
+  function createMovementDropdownField(label, fieldKey, options, otherFieldKey) {
+    const otherInput = el("input", {
+      class: "movement-other-input",
+      type: "text",
+      value: entry[otherFieldKey] || "",
+      placeholder: `Enter ${label}`,
+      "aria-label": `${label} other`,
+      oninput: (event) => {
+        entry[otherFieldKey] = event.target.value;
+        onFieldChange();
+      },
+    });
+    function renderOtherInput() {
+      otherInput.classList.toggle("hidden", entry[fieldKey] !== "Other");
+    }
+    const select = createDropdown(options, entry[fieldKey], (value) => {
+      entry[fieldKey] = value;
+      renderOtherInput();
+      onFieldChange();
+    }, { "aria-label": label });
+    renderOtherInput();
+    return el("div", { class: "movement-detail-field" }, [
+      el("label", {}, label),
+      select,
+      otherInput,
+    ]);
+  }
+
+  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+    createMovementTimeField("Loco Takeover", "locoTakeoverTime"),
+    createMovementHistoryField("Place", "locoTakeoverPlace"),
+    createMovementTimeField("Checked Upto", "locoCheckedUptoTime"),
+  ]));
+  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+    createMovementTimeField("Loco Offer", "locoOfferTime"),
+    createMovementDropdownField("Place", "locoOfferPlace", LOCO_OFFER_PLACE_OPTIONS, "locoOfferPlaceOther"),
+    createMovementTimeField("Dep Time", "locoOfferDepartureTime"),
+  ]));
+  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+    createMovementTimeField("Engine On Train", "engineOnTrainTime"),
+    createMovementHistoryField("EOT Place", "engineOnTrainPlace"),
+  ]));
+  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+    createMovementTimeField("HOG Attached From", "hogAttachedTime"),
+    createMovementTimeField("HOG Attached To", "hogAttachedToTime"),
+    createMovementHistoryField("Place", "hogAttachedPlace"),
+  ]));
+  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+    createMovementTimeField("BP/FP Buildup Time", "bpFpTime"),
+    createMovementDropdownField("Place", "bpFpPlace", BP_FP_PLACE_OPTIONS, "bpFpPlaceOther"),
+  ]));
+
+  const privateDetailsRow = el("div", { class: "movement-private-fields hidden" }, [
+    createMovementManualField("Private Number", "privateNumber", "Private number"),
+    createMovementManualField("Yard Master Name", "yardMasterName", "Name"),
+    createMovementManualField("PM Name", "pmName", "Name"),
+  ]);
+  const privateDetailsButton = el("button", {
+    class: "secondary-btn movement-private-btn",
+    type: "button",
+  });
+  function renderPrivateDetails() {
+    privateDetailsRow.classList.toggle("hidden", !entry.privateDetailsEnabled);
+    privateDetailsButton.textContent = entry.privateDetailsEnabled ? "− Hide Private Details" : "+ Private Details";
+  }
+  privateDetailsButton.addEventListener("click", () => {
+    entry.privateDetailsEnabled = !entry.privateDetailsEnabled;
+    renderPrivateDetails();
+    onFieldChange();
+  });
+  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+    createMovementTimeField("Yard Dep", "departureTime"),
+    createMovementHistoryField("Signal", "yardSignal"),
+    el("div", { class: "movement-detail-field" }, [
+      el("label", {}, "Private Details"),
+      privateDetailsButton,
+    ]),
+  ]));
+  timelineSection.appendChild(privateDetailsRow);
+  renderPrivateDetails();
+
+  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+    createMovementTimeField("Placement Time", "placementTime"),
+    createMovementHistoryField("PF No.", "placementPfNumber"),
+  ]));
+  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+    createMovementTimeField("Cont. Time", "continuityTime"),
+    createMovementTimeField("BPC Time", "bpcTime"),
+  ]));
+  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+    createMovementManualField("Made Over Charge Name", "madeOverChargeName", "Name"),
+    createMovementManualField("HQ", "madeOverChargeHQ", "HQ"),
+    createMovementTimeField("Made Over Charge Time", "madeOverChargeTime"),
+  ]));
   remainingDetailsPage.appendChild(timelineSection);
 
   // --- Remarks ---
@@ -981,9 +1225,16 @@ async function showForm(container, setHeaderTitle, entryId) {
   ]));
   remainingDetailsPage.appendChild(remarksSection);
   remainingDetailsPage.appendChild(el("button", {
+    class: "primary-btn",
+    type: "button",
+    style: "width:100%;margin-bottom:10px;",
+    onclick: finalizeEntry,
+  }, "Save Record"));
+  remainingDetailsPage.appendChild(el("button", {
     class: "secondary-btn",
     type: "button",
     style: "width:100%;margin-bottom:12px;",
     onclick: () => showDeparturePage(1),
   }, "← Train & Loco Details"));
+  showDeparturePage(isArrivalMovement ? 1 : entry.draftPage, false);
 }
