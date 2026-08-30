@@ -28,6 +28,7 @@ export const RTIS_STATUS_OPTIONS = Object.values(RTISStatus);
 
 export const LOCOMOTIVE_TYPE_OPTIONS = ["WAP5", "WAP7", "WAG9", "WAP4", "DSL Loco", "WAG12"];
 export const CAB_OPTIONS = ["Cab-1", "Cab-2"];
+export const PT_TYPE_OPTIONS = ["Normal", "Both HRP", "PT-1 HRP", "PT-2 HRP"];
 
 // Default schedule types seeded on first launch. User can add more from Settings.
 export const DEFAULT_SCHEDULE_TYPES = ["IA", "IB", "IC", "IOH", "POH", "MOH", "TI"];
@@ -54,6 +55,18 @@ export function newLocomotive() {
   return { id: uuid(), number: "", locoClass: "", shed: "" };
 }
 
+export function newAdditionalLocomotive(role) {
+  return {
+    id: uuid(),
+    role,
+    locomotiveNumberSnapshot: "",
+    locomotiveType: "",
+    locomotiveShed: "",
+    cabSelection: "",
+    ptType: PT_TYPE_OPTIONS[0],
+  };
+}
+
 export function newDutyEntry() {
   const now = new Date().toISOString();
   const entry = {
@@ -67,6 +80,8 @@ export function newDutyEntry() {
     locomotiveType: "",
     locomotiveShed: "",
     cabSelection: "",
+    locomotivePTType: PT_TYPE_OPTIONS[0],
+    additionalLocomotives: [],
     remarks: "",
     acStatus: ACStatus.WORKING,
     uicStatus: UICStatus.NORMAL,

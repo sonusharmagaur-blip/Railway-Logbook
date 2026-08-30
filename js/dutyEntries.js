@@ -3,6 +3,7 @@ import {
   newDutyEntry, kmFieldLabel, TIMELINE_STEPS,
   AC_STATUS_OPTIONS, UIC_STATUS_OPTIONS, UIC_CABLE_OPTIONS, RTIS_STATUS_OPTIONS,
   ACStatus, UICStatus, DEFAULT_SCHEDULE_TYPES, LOCOMOTIVE_TYPE_OPTIONS, CAB_OPTIONS,
+  PT_TYPE_OPTIONS, newAdditionalLocomotive,
 } from "./models.js";
 import { AutosaveController, wireLifecycleFlush } from "./autosave.js";
 import { el, formatDate, formatTime, createTimeField, createDropdown, todayDateInputValue } from "./util.js";
@@ -15,6 +16,11 @@ let currentUnwireLifecycle = null;
 function isEntryEmpty(entry) {
   if (entry.trainNumber || entry.trainName || entry.remarks) return false;
   if (entry.locomotiveId || entry.locomotiveNumberSnapshot || entry.locomotiveType || entry.locomotiveShed) return false;
+  if (entry.locomotivePTType && entry.locomotivePTType !== PT_TYPE_OPTIONS[0]) return false;
+  if ((entry.additionalLocomotives || []).some((loco) =>
+    loco.locomotiveNumberSnapshot || loco.locomotiveType || loco.locomotiveShed || loco.cabSelection ||
+    (loco.ptType && loco.ptType !== PT_TYPE_OPTIONS[0])
+  )) return false;
   for (const step of TIMELINE_STEPS) {
     if (entry[step.key]) return false;
   }
@@ -43,11 +49,26 @@ function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
 
   for (const candidate of newestFirst) {
     const legacy = legacyById.get(candidate.locomotiveId);
-    const number = normalizeLocomotiveNumber(candidate.locomotiveNumberSnapshot || (legacy && legacy.number));
-    if (!number || history.has(number)) continue;
-    const type = canonicalLocomotiveType(candidate.locomotiveType || (legacy && legacy.locoClass));
-    const shed = sanitizeShedCode(candidate.locomotiveShed || (legacy && legacy.shed));
-    if (type || shed) history.set(number, { type, shed });
+    const candidateLocomotives = [
+      {
+        number: candidate.locomotiveNumberSnapshot || (legacy && legacy.number),
+        type: candidate.locomotiveType || (legacy && legacy.locoClass),
+        shed: candidate.locomotiveShed || (legacy && legacy.shed),
+      },
+      ...(candidate.additionalLocomotives || []).map((loco) => ({
+        number: loco.locomotiveNumberSnapshot,
+        type: loco.locomotiveType,
+        shed: loco.locomotiveShed,
+      })),
+    ];
+
+    for (const locomotive of candidateLocomotives) {
+      const number = normalizeLocomotiveNumber(locomotive.number);
+      if (!number || history.has(number)) continue;
+      const type = canonicalLocomotiveType(locomotive.type);
+      const shed = sanitizeShedCode(locomotive.shed);
+      if (type || shed) history.set(number, { type, shed });
+    }
   }
 
   for (const loco of locomotives) {
@@ -190,6 +211,8 @@ async function showForm(container, setHeaderTitle, entryId) {
   container.innerHTML = "";
 
   let entry = await DB.get("dutyEntries", entryId);
+  if (!entry.locomotivePTType) entry.locomotivePTType = PT_TYPE_OPTIONS[0];
+  if (!Array.isArray(entry.additionalLocomotives)) entry.additionalLocomotives = [];
   const locomotives = await DB.getAll("locomotives");
   const allDutyEntries = await DB.getAll("dutyEntries");
   const locomotiveHistory = buildLocomotiveHistory(allDutyEntries, locomotives, entry.id);
@@ -238,6 +261,30 @@ async function showForm(container, setHeaderTitle, entryId) {
     ]),
   ]);
   container.appendChild(header);
+
+  const stepHeading = el("div", { style: "font-weight:700;font-size:16px;" }, "Train & Loco Details");
+  const stepCount = el("div", { style: "color:var(--text-muted);font-size:13px;" }, "Step 1 of 2");
+  const progressFill = el("div", { style: "height:100%;width:50%;background:var(--maroon);border-radius:999px;transition:width .2s ease;" });
+  const progressCard = el("div", { class: "card", style: "padding:14px;margin-bottom:12px;" }, [
+    el("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;" }, [stepHeading, stepCount]),
+    el("div", { style: "height:5px;background:var(--border);border-radius:999px;overflow:hidden;" }, [progressFill]),
+  ]);
+  const trainLocoPage = el("div", {});
+  const remainingDetailsPage = el("div", { style: "display:none;" });
+
+  function showDeparturePage(pageNumber) {
+    const showFirstPage = pageNumber === 1;
+    trainLocoPage.style.display = showFirstPage ? "block" : "none";
+    remainingDetailsPage.style.display = showFirstPage ? "none" : "block";
+    stepHeading.textContent = showFirstPage ? "Train & Loco Details" : "Movement Details";
+    stepCount.textContent = showFirstPage ? "Step 1 of 2" : "Step 2 of 2";
+    progressFill.style.width = showFirstPage ? "50%" : "100%";
+    container.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  container.appendChild(progressCard);
+  container.appendChild(trainLocoPage);
+  container.appendChild(remainingDetailsPage);
 
   // --- Trip Info ---
   const tripSection = el("div", { class: "form-section" });
@@ -331,8 +378,177 @@ async function showForm(container, setHeaderTitle, entryId) {
     if (entry.cabSelection === cab) option.selected = true;
     cabSelect.appendChild(option);
   }
-  tripSection.appendChild(el("div", { class: "form-row cab-row" }, [el("label", {}, "Cab"), cabSelect]));
-  container.appendChild(tripSection);
+
+  const ptTypeSelect = createDropdown(PT_TYPE_OPTIONS, entry.locomotivePTType, (value) => {
+    entry.locomotivePTType = value;
+    onFieldChange();
+  });
+  tripSection.appendChild(el("div", { class: "form-row cab-pt-row" }, [
+    el("div", { class: "cab-pt-grid" }, [
+      el("div", { class: "cab-pt-field" }, [el("label", {}, "Cab"), cabSelect]),
+      el("div", { class: "cab-pt-field" }, [el("label", {}, "PT Type"), ptTypeSelect]),
+    ]),
+  ]));
+
+  const additionalLocomotivesHolder = el("div", { class: "additional-locomotives" });
+
+  function renderAdditionalLocomotives() {
+    additionalLocomotivesHolder.innerHTML = "";
+    const roleCounts = { slave: 0, dead: 0 };
+
+    entry.additionalLocomotives.forEach((locomotive, index) => {
+      const role = locomotive.role === "dead" ? "dead" : "slave";
+      roleCounts[role] += 1;
+      const roleTitle = `${role === "dead" ? "Dead Loco" : "Slave Loco"} ${roleCounts[role]}`;
+      if (!locomotive.ptType) locomotive.ptType = PT_TYPE_OPTIONS[0];
+
+      const additionalRecallNote = el("div", { class: "loco-recall-note hidden" }, "Previous details found — type and shed filled.");
+      const additionalTypeSelect = el("select", { "aria-label": `${roleTitle} type` });
+      additionalTypeSelect.appendChild(el("option", { value: "", disabled: "" }, "Select"));
+      for (const type of LOCOMOTIVE_TYPE_OPTIONS) additionalTypeSelect.appendChild(el("option", { value: type }, type));
+      additionalTypeSelect.value = canonicalLocomotiveType(locomotive.locomotiveType);
+      additionalTypeSelect.addEventListener("change", (event) => {
+        locomotive.locomotiveType = event.target.value;
+        onFieldChange();
+      });
+
+      const additionalShedInput = el("input", {
+        type: "text",
+        value: sanitizeShedCode(locomotive.locomotiveShed),
+        placeholder: "TKD",
+        minlength: "3",
+        maxlength: "4",
+        pattern: "[A-Z]{3,4}",
+        autocapitalize: "characters",
+        "aria-label": `${roleTitle} shed code`,
+        oninput: (event) => {
+          const value = sanitizeShedCode(event.target.value);
+          event.target.value = value;
+          locomotive.locomotiveShed = value;
+          onFieldChange();
+        },
+      });
+
+      const additionalNumberInput = el("input", {
+        type: "text",
+        value: normalizeLocomotiveNumber(locomotive.locomotiveNumberSnapshot),
+        placeholder: "Number",
+        inputmode: "numeric",
+        pattern: "[0-9]*",
+        "aria-label": `${roleTitle} number`,
+        oninput: (event) => {
+          const number = normalizeLocomotiveNumber(event.target.value);
+          event.target.value = number;
+          locomotive.locomotiveNumberSnapshot = number;
+          const remembered = locomotiveHistory.get(number);
+          if (remembered) {
+            locomotive.locomotiveType = remembered.type;
+            locomotive.locomotiveShed = remembered.shed;
+            additionalTypeSelect.value = remembered.type;
+            additionalShedInput.value = remembered.shed;
+            additionalRecallNote.classList.remove("hidden");
+          } else {
+            additionalRecallNote.classList.add("hidden");
+          }
+          onFieldChange();
+        },
+      });
+
+      const additionalCabSelect = el("select", {
+        "aria-label": `${roleTitle} cab`,
+        onchange: (event) => {
+          locomotive.cabSelection = event.target.value;
+          onFieldChange();
+        },
+      });
+      additionalCabSelect.appendChild(el("option", { value: "", disabled: "" }, "Select cab"));
+      for (const cab of CAB_OPTIONS) {
+        const option = el("option", { value: cab }, cab);
+        if (locomotive.cabSelection === cab) option.selected = true;
+        additionalCabSelect.appendChild(option);
+      }
+
+      const additionalPTTypeSelect = createDropdown(PT_TYPE_OPTIONS, locomotive.ptType, (value) => {
+        locomotive.ptType = value;
+        onFieldChange();
+      });
+      additionalPTTypeSelect.setAttribute("aria-label", `${roleTitle} PT type`);
+
+      const additionalCard = el("div", { class: "additional-loco-card" }, [
+        el("div", { class: "additional-loco-header" }, [
+          el("div", { class: "additional-loco-title" }, roleTitle),
+          el("button", {
+            class: "remove-loco-btn",
+            type: "button",
+            "aria-label": `Remove ${roleTitle}`,
+            onclick: () => {
+              entry.additionalLocomotives.splice(index, 1);
+              renderAdditionalLocomotives();
+              onFieldChange();
+            },
+          }, "Remove"),
+        ]),
+        el("div", { class: "locomotive-fields" }, [
+          el("div", { class: "locomotive-field" }, [el("span", {}, "Loco No."), additionalNumberInput]),
+          el("div", { class: "locomotive-field" }, [el("span", {}, "Type"), additionalTypeSelect]),
+          el("div", { class: "locomotive-field" }, [el("span", {}, "Shed"), additionalShedInput]),
+        ]),
+        additionalRecallNote,
+        el("div", { class: "cab-pt-grid additional-cab-pt-grid" }, [
+          el("div", { class: "cab-pt-field" }, [el("label", {}, "Cab"), additionalCabSelect]),
+          el("div", { class: "cab-pt-field" }, [el("label", {}, "PT Type"), additionalPTTypeSelect]),
+        ]),
+      ]);
+      additionalLocomotivesHolder.appendChild(additionalCard);
+    });
+  }
+
+  function openAdditionalLocomotivePicker() {
+    const overlay = el("div", { class: "overlay" });
+    function addLocomotive(role) {
+      entry.additionalLocomotives.push(newAdditionalLocomotive(role));
+      overlay.remove();
+      renderAdditionalLocomotives();
+      onFieldChange();
+    }
+
+    overlay.appendChild(el("div", { class: "overlay-card" }, [
+      el("div", { style: "display:flex;align-items:center;justify-content:space-between;gap:12px;" }, [
+        el("h2", {}, "Add Locomotive"),
+        el("button", {
+          class: "icon-btn",
+          type: "button",
+          "aria-label": "Close locomotive selection",
+          onclick: () => overlay.remove(),
+        }, "×"),
+      ]),
+      el("p", {}, "Select how this locomotive is attached to the train."),
+      el("div", { style: "display:grid;gap:10px;" }, [
+        el("button", { class: "primary-btn", type: "button", onclick: () => addLocomotive("slave") }, "Add Slave Loco"),
+        el("button", { class: "secondary-btn", type: "button", style: "width:100%;", onclick: () => addLocomotive("dead") }, "Add Dead Loco"),
+      ]),
+    ]));
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+  }
+
+  tripSection.appendChild(additionalLocomotivesHolder);
+  tripSection.appendChild(el("div", { class: "add-loco-row" }, [
+    el("button", {
+      class: "secondary-btn add-loco-btn",
+      type: "button",
+      onclick: openAdditionalLocomotivePicker,
+    }, "+ Add Loco"),
+  ]));
+  renderAdditionalLocomotives();
+  trainLocoPage.appendChild(tripSection);
+  trainLocoPage.appendChild(el("button", {
+    class: "primary-btn",
+    type: "button",
+    onclick: () => showDeparturePage(2),
+  }, "Next: Movement Details →"));
 
   // --- Timeline of Working ---
   const timelineSection = el("div", { class: "form-section" });
@@ -349,7 +565,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       ]));
     }
   }
-  container.appendChild(timelineSection);
+  remainingDetailsPage.appendChild(timelineSection);
 
   // --- Status Checks ---
   const statusSection = el("div", { class: "form-section" });
@@ -382,7 +598,7 @@ async function showForm(container, setHeaderTitle, entryId) {
     el("label", {}, "RTIS"),
     createDropdown(RTIS_STATUS_OPTIONS, entry.rtisStatus, (v) => { entry.rtisStatus = v; onFieldChange(); }),
   ]));
-  container.appendChild(statusSection);
+  remainingDetailsPage.appendChild(statusSection);
 
   // --- Schedule Info ---
   const schedSection = el("div", { class: "form-section" });
@@ -404,7 +620,7 @@ async function showForm(container, setHeaderTitle, entryId) {
     kmLabel,
     el("input", { type: "number", inputmode: "decimal", value: entry.kmSinceLastSchedule ?? "", oninput: (e) => { entry.kmSinceLastSchedule = e.target.value === "" ? null : Number(e.target.value); onFieldChange(); } }),
   ]));
-  container.appendChild(schedSection);
+  remainingDetailsPage.appendChild(schedSection);
 
   // --- Remarks ---
   const remarksSection = el("div", { class: "form-section" });
@@ -412,5 +628,11 @@ async function showForm(container, setHeaderTitle, entryId) {
   remarksSection.appendChild(el("div", { class: "form-row" }, [
     el("textarea", { oninput: (e) => { entry.remarks = e.target.value; onFieldChange(); } }, entry.remarks || ""),
   ]));
-  container.appendChild(remarksSection);
+  remainingDetailsPage.appendChild(remarksSection);
+  remainingDetailsPage.appendChild(el("button", {
+    class: "secondary-btn",
+    type: "button",
+    style: "width:100%;margin-bottom:12px;",
+    onclick: () => showDeparturePage(1),
+  }, "← Train & Loco Details"));
 }
