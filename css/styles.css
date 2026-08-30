@@ -333,6 +333,76 @@ html, body {
   border: none; background: none; color: var(--text-muted); font-size: 18px; line-height: 1; padding: 4px;
 }
 
+.movement-detail-row,
+.movement-private-fields {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  align-items: start;
+}
+.movement-detail-row.two-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.movement-detail-row.three-fields,
+.movement-private-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.movement-detail-field { min-width: 0; }
+.movement-detail-field > label {
+  display: block;
+  min-height: 26px;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+.movement-detail-field > input,
+.movement-detail-field > select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 6px;
+  background: white;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.movement-detail-field .time-row-controls {
+  width: 100%;
+  gap: 3px;
+}
+.movement-detail-field .time-row-controls .secondary-btn {
+  width: 100%;
+  padding: 8px 5px;
+  font-size: 12px;
+}
+.movement-detail-field .time-row-controls input[type="time"] {
+  width: calc(100% - 24px);
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 4px;
+  background: white;
+  color: var(--text);
+  font-size: 12px;
+}
+.movement-detail-field .time-clear-btn { padding: 2px; }
+.movement-other-input { margin-top: 6px; }
+.movement-private-btn {
+  width: 100%;
+  padding: 8px 5px;
+  font-size: 12px;
+}
+
+@media (max-width: 360px) {
+  .movement-detail-row,
+  .movement-private-fields { gap: 5px; padding-left: 8px; padding-right: 8px; }
+  .movement-detail-field > label { font-size: 10px; }
+  .movement-detail-field > input,
+  .movement-detail-field > select,
+  .movement-detail-field .time-row-controls input[type="time"],
+  .movement-detail-field .time-row-controls .secondary-btn,
+  .movement-private-btn { font-size: 11px; }
+}
+
 /* Buttons */
 .primary-btn {
   background: var(--maroon);
