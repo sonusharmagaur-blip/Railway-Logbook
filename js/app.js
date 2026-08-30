@@ -44,9 +44,26 @@ async function seedDefaultsIfNeeded() {
 }
 
 function registerServiceWorker() {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch((err) => console.error("SW registration failed", err));
-  }
+  if (!("serviceWorker" in navigator)) return;
+
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+    .then((registration) => {
+      const checkForUpdate = () => registration.update().catch(() => {});
+      checkForUpdate();
+      window.addEventListener("focus", checkForUpdate);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkForUpdate();
+      });
+    })
+    .catch((err) => console.error("SW registration failed", err));
 }
 
 async function requestPersistentStorage() {
