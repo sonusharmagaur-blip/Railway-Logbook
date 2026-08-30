@@ -155,6 +155,55 @@ html, body {
 .loco-recall-note { color: var(--ok); font-size: 12px; margin-top: 7px; }
 .hidden { display: none !important; }
 .cab-row { padding-top: 9px; padding-bottom: 10px; }
+.cab-pt-row { padding-top: 9px; padding-bottom: 10px; }
+.cab-pt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.cab-pt-field { min-width: 0; }
+.cab-pt-field label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.cab-pt-field select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 8px;
+  font-size: 15px;
+  font-family: inherit;
+  background: white;
+  color: var(--text);
+  width: 100%;
+}
+.additional-locomotives:empty { display: none; }
+.additional-loco-card {
+  border-top: 1px solid var(--border);
+  padding: 12px 14px;
+  background: #fffdf9;
+}
+.additional-loco-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.additional-loco-title { font-size: 14px; font-weight: 700; color: var(--maroon); }
+.remove-loco-btn {
+  border: none;
+  background: none;
+  color: var(--danger);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px;
+  cursor: pointer;
+}
+.additional-cab-pt-grid { margin-top: 10px; }
+.add-loco-row { border-top: 1px solid var(--border); padding: 10px 14px; }
+.add-loco-btn { width: 100%; font-weight: 600; }
 
 @media (max-width: 360px) {
   .locomotive-fields { gap: 5px; }
