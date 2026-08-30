@@ -270,6 +270,42 @@ html, body {
 }
 .component-field select { font-size: 13px; }
 .component-field .component-other-input { margin-top: 6px; }
+.single-component-row { grid-template-columns: minmax(0, 1fr); }
+.spare-items-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 2px;
+}
+.spare-item-check {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+  margin: 0 !important;
+  padding: 8px;
+  border: 1px solid #efb4ac;
+  border-radius: 8px;
+  background: #fff0ee;
+  color: var(--danger) !important;
+  font-size: 12px !important;
+  font-weight: 700;
+  cursor: pointer;
+}
+.spare-item-check.is-available {
+  border-color: #9ccca8;
+  background: #effaf1;
+  color: #26733a !important;
+}
+.spare-item-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  accent-color: #26733a;
+}
+.spare-other-input { margin-top: 8px; }
 
 @media (max-width: 360px) {
   .locomotive-fields { gap: 5px; }
