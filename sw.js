@@ -1,6 +1,6 @@
 // Service worker: caches the app shell so RailwayLogbook works fully offline.
 // Bump CACHE_NAME whenever any precached file changes so clients pick up the update.
-const CACHE_NAME = "railwaylogbook-v11";
+const CACHE_NAME = "railwaylogbook-v12";
 
 const PRECACHE_URLS = [
   "./",
@@ -28,7 +28,13 @@ const PRECACHE_URLS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then((cache) => Promise.all(PRECACHE_URLS.map(async (path) => {
+        const response = await fetch(new Request(path, { cache: "reload" }));
+        if (!response.ok) throw new Error(`Failed to precache ${path}`);
+        await cache.put(path, response);
+      })))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -46,6 +52,21 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./")))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
