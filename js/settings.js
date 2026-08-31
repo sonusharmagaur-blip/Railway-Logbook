@@ -3,6 +3,7 @@ import { el, formatRelative } from "./util.js";
 import { AutosaveController } from "./autosave.js";
 import { renderScheduleTypeManager } from "./scheduleTypes.js";
 import * as Drive from "./drive.js";
+import * as Sheets from "./sheets.js";
 import { showToast } from "./toast.js";
 
 export async function mountSettingsTab(container, setHeaderTitle) {
@@ -221,6 +222,115 @@ export async function mountSettingsTab(container, setHeaderTitle) {
 
   backupSection.appendChild(el("div", { class: "form-row" }, [connectBtn, backupNowBtn, disconnectBtn]));
   container.appendChild(backupSection);
+
+  // --- Google Sheet recordkeeping for Duty Adjustments ---
+  const sheetSection = el("div", { class: "form-section" });
+  sheetSection.appendChild(el("div", { class: "form-section-title" }, "Google Sheet · Duty Adjustments"));
+  const linkedSheet = await Sheets.getLinkedSheet();
+  const sheetInput = el("input", {
+    type: "text",
+    placeholder: "Paste Google Sheet URL or Sheet ID",
+    value: linkedSheet ? linkedSheet.url : "",
+    "aria-label": "Google Sheet URL or ID",
+  });
+  const sheetStatus = el("div", { class: "sheet-sync-status" });
+  const openSheetHolder = el("div", { class: "sheet-open-holder" });
+
+  async function refreshSheetStatus() {
+    const [linked, pending, lastSync] = await Promise.all([
+      Sheets.getLinkedSheet(),
+      Sheets.countPendingAdjustmentRecords(),
+      Sheets.getLastSheetSyncAt(),
+    ]);
+    sheetStatus.innerHTML = "";
+    sheetStatus.appendChild(el("span", { class: `sheet-status-dot${linked ? " is-linked" : ""}` }));
+    sheetStatus.appendChild(el("span", {}, linked
+      ? `${pending} pending · Last sync: ${formatRelative(lastSync)}`
+      : `${pending} saved record${pending === 1 ? "" : "s"} waiting for a linked Sheet`));
+    openSheetHolder.innerHTML = "";
+    if (linked) {
+      openSheetHolder.appendChild(el("a", {
+        class: "secondary-btn sheet-open-link",
+        href: linked.url,
+        target: "_blank",
+        rel: "noopener",
+      }, "Open Linked Sheet"));
+    }
+  }
+
+  const linkSheetBtn = el("button", {
+    class: "secondary-btn",
+    type: "button",
+    onclick: async () => {
+      linkSheetBtn.disabled = true;
+      linkSheetBtn.textContent = "Linking…";
+      try {
+        await Drive.setClientId(clientIdInput.value.trim());
+        const linked = await Sheets.linkExistingSheet(sheetInput.value);
+        sheetInput.value = linked.url;
+        showToast("Google Sheet linked.");
+        await refreshSheetStatus();
+      } catch (error) {
+        showToast(error.message || "Could not link Google Sheet.");
+      } finally {
+        linkSheetBtn.disabled = false;
+        linkSheetBtn.textContent = "Link Existing Sheet";
+      }
+    },
+  }, "Link Existing Sheet");
+
+  const createSheetBtn = el("button", {
+    class: "secondary-btn",
+    type: "button",
+    onclick: async () => {
+      createSheetBtn.disabled = true;
+      createSheetBtn.textContent = "Creating…";
+      try {
+        await Drive.setClientId(clientIdInput.value.trim());
+        const linked = await Sheets.createAndLinkSheet();
+        sheetInput.value = linked.url;
+        showToast("New Google Sheet created and linked.");
+        await refreshSheetStatus();
+      } catch (error) {
+        showToast(error.message || "Could not create Google Sheet.");
+      } finally {
+        createSheetBtn.disabled = false;
+        createSheetBtn.textContent = "Create New Sheet";
+      }
+    },
+  }, "Create New Sheet");
+
+  const syncSheetBtn = el("button", {
+    class: "primary-btn",
+    type: "button",
+    onclick: async () => {
+      syncSheetBtn.disabled = true;
+      syncSheetBtn.textContent = "Syncing…";
+      try {
+        await Drive.setClientId(clientIdInput.value.trim());
+        const result = await Sheets.syncPendingAdjustmentRecords({ interactive: true });
+        if (result.status === "not-linked") throw new Error("Link or create a Google Sheet first.");
+        showToast(result.synced ? `${result.synced} record${result.synced === 1 ? "" : "s"} synced.` : "Google Sheet is already up to date.");
+        await refreshSheetStatus();
+      } catch (error) {
+        showToast(error.message || "Google Sheet sync failed.");
+      } finally {
+        syncSheetBtn.disabled = false;
+        syncSheetBtn.textContent = "Sync Pending Records";
+      }
+    },
+  }, "Sync Pending Records");
+
+  sheetSection.appendChild(el("div", { class: "form-row" }, [
+    el("label", {}, "Linked Google Sheet"),
+    sheetInput,
+    el("span", { class: "list-row-sub" }, "Free setup: use the same OAuth Client ID above and enable Google Sheets API in that Google Cloud project."),
+    el("div", { class: "sheet-link-actions" }, [linkSheetBtn, createSheetBtn]),
+    sheetStatus,
+    el("div", { class: "sheet-sync-actions" }, [syncSheetBtn, openSheetHolder]),
+  ]));
+  container.appendChild(sheetSection);
+  await refreshSheetStatus();
 
   const restoreLink = el("div", { class: "card list-row", onclick: () => openRestoreView(container, setHeaderTitle) }, [
     el("div", { class: "list-row-main" }, [el("div", { class: "list-row-title" }, "Restore from Backup")]),

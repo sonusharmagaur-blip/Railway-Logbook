@@ -21,7 +21,7 @@ function loadStoredToken() {
 
 function storeToken(tokenResponse) {
   const expiresAt = Date.now() + (tokenResponse.expires_in || 3600) * 1000 - 60000; // 1 min safety margin
-  const data = { accessToken: tokenResponse.access_token, expiresAt };
+  const data = { accessToken: tokenResponse.access_token, expiresAt, scope: tokenResponse.scope || "" };
   localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(data));
   return data;
 }
@@ -53,7 +53,7 @@ function ensureTokenClient(clientId) {
   if (tokenClient && tokenClient._clientId === clientId) return tokenClient;
   tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: clientId,
-    scope: Constants.driveScope,
+    scope: Constants.googleScopes,
     callback: () => {}, // overridden per-request below
   });
   tokenClient._clientId = clientId;
@@ -73,9 +73,12 @@ export async function signIn({ forceConsent = true, clientId = null } = {}) {
   });
 }
 
-export async function getValidAccessToken({ interactive = false, clientId = null } = {}) {
+export async function getValidAccessToken({ interactive = false, clientId = null, requiredScopes = [] } = {}) {
   const stored = loadStoredToken();
-  if (stored) return stored.accessToken;
+  const hasRequiredScopes = stored && requiredScopes.every((scope) =>
+    String(stored.scope || "").split(/\s+/).includes(scope)
+  );
+  if (stored && (requiredScopes.length === 0 || hasRequiredScopes)) return stored.accessToken;
   if (!interactive) return null;
   const token = await signIn({ forceConsent: false, clientId });
   return token.accessToken;

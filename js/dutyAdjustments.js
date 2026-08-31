@@ -1,6 +1,7 @@
 import { DB } from "./db.js";
 import { el, formatDate } from "./util.js";
 import { showToast } from "./toast.js";
+import { syncPendingAdjustmentRecords } from "./sheets.js";
 
 const ADJUSTMENT_TYPES = ["Shift", "Link", "Rest", "Other"];
 
@@ -304,9 +305,19 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
           remark: row.remark.trim(),
           createdAt: now,
           lastModified: now,
+          sheetSyncStatus: "pending",
+          sheetSyncedTo: "",
+          sheetSyncedAt: null,
         });
       }
-      showToast(`${rows.length} adjustment record${rows.length === 1 ? "" : "s"} saved.`);
+      let savedMessage = `${rows.length} adjustment record${rows.length === 1 ? "" : "s"} saved.`;
+      try {
+        const syncResult = await syncPendingAdjustmentRecords({ interactive: false });
+        if (syncResult.synced > 0) savedMessage = `${savedMessage} Google Sheet synced.`;
+      } catch (error) {
+        savedMessage = `${savedMessage} Sheet sync pending.`;
+      }
+      showToast(savedMessage);
       await mountDutyAdjustmentTab(container, setHeaderTitle);
     },
   }, "Save Adjustment Records"));
