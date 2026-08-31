@@ -285,11 +285,14 @@ function openMovementTypePicker(container, setHeaderTitle) {
 
 async function showList(container, setHeaderTitle) {
   if (currentUnwireLifecycle) { currentUnwireLifecycle(); currentUnwireLifecycle = null; }
-  setHeaderTitle("Duty Log");
+  setHeaderTitle("Movement Diary");
   container.innerHTML = "";
 
   let allEntries = await DB.getAll("dutyEntries");
   allEntries.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.lastModified || "").localeCompare(a.lastModified || ""));
+  const locomotives = await DB.getAll("locomotives");
+  let filteredEntries = allEntries;
+  let currentPageIndex = 0;
 
   const toolbar = el("div", { class: "toolbar-row" }, [
     el("button", { class: "secondary-btn", onclick: () => openRangeReport(allEntries) }, "Export range report"),
@@ -305,7 +308,7 @@ async function showList(container, setHeaderTitle) {
   filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("Search"), searchInput]));
   container.appendChild(filterCard);
 
-  const listWrap = el("div", {});
+  const listWrap = el("div", { class: "diary-wrap" });
   container.appendChild(listWrap);
 
   function applyFilterAndRender() {
@@ -320,35 +323,197 @@ async function showList(container, setHeaderTitle) {
         (e.locomotiveNumberSnapshot || "").toLowerCase().includes(q)
       );
     }
-    renderRows(filtered);
+    filteredEntries = filtered;
+    currentPageIndex = 0;
+    renderDiaryPage();
   }
 
-  function renderRows(entries) {
+  function detailValue(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    return String(value);
+  }
+
+  function diaryDetail(label, value) {
+    return el("div", { class: "diary-detail" }, [
+      el("span", { class: "diary-detail-label" }, [
+        el("span", { class: "field-label-icon", "aria-hidden": "true" }, fieldIconForLabel(label)),
+        el("span", {}, label),
+      ]),
+      el("span", { class: "diary-detail-value" }, detailValue(value)),
+    ]);
+  }
+
+  function diarySection(title, rows) {
+    const usableRows = rows.filter(([, value]) => value !== null && value !== undefined && value !== "");
+    return el("section", { class: "diary-section" }, [
+      el("h3", {}, title),
+      usableRows.length
+        ? el("div", { class: "diary-detail-grid" }, usableRows.map(([label, value]) => diaryDetail(label, value)))
+        : el("div", { class: "diary-empty" }, "No details recorded."),
+    ]);
+  }
+
+  function minorScheduleSummary(entry) {
+    const schedules = (entry.minorSchedules || []).filter((schedule) => schedule.type || schedule.date || schedule.km !== null && schedule.km !== undefined);
+    if (!schedules.length) return "—";
+    return schedules.map((schedule, index) => {
+      const details = [schedule.type, schedule.date ? formatDate(schedule.date) : "", schedule.km !== null && schedule.km !== undefined ? `${schedule.km} KM` : ""].filter(Boolean);
+      return `${index + 1}. ${details.join(" · ")}`;
+    }).join(" | ");
+  }
+
+  function spareItemsSummary(entry) {
+    const spareLabels = {
+      bp: "BP", fp: "FP", sc: "SC", tsc: "TSC", fourWw: "4WW",
+      fireExt: "2+2 Fire Ext.", ptFuse: "2 PT-Fuse",
+    };
+    const available = Object.entries(spareLabels)
+      .filter(([key]) => entry.spareItems && entry.spareItems[key] === true)
+      .map(([, label]) => label);
+    if (entry.spareItems && entry.spareItems.other) available.push(entry.spareItems.otherText || "Other");
+    return available.length ? available.join(", ") : "None marked available";
+  }
+
+  function renderDiaryPage() {
     listWrap.innerHTML = "";
-    if (entries.length === 0) {
+    if (filteredEntries.length === 0) {
       listWrap.appendChild(el("div", { class: "empty-state" }, "No duty entries yet. Tap + to add one."));
       return;
     }
-    for (const entry of entries) {
-      const badges = [];
-      if (entry.isDraft === true) badges.push(el("span", { class: "badge warn" }, "Draft"));
-      if (entry.acStatus && entry.acStatus !== ACStatus.WORKING) badges.push(el("span", { class: "badge warn" }, "AC"));
-      if (entry.uicStatus === UICStatus.MODIFIED) badges.push(el("span", { class: "badge" }, "UIC Modified"));
-      const row = el("div", { class: "card list-row", onclick: () => showForm(container, setHeaderTitle, entry.id) }, [
-        el("div", { class: "list-row-main" }, [
-          el("div", { class: "list-row-title" }, `${entry.trainNumber || "—"} ${entry.trainName ? "· " + entry.trainName : ""}`),
-          el("div", { class: "list-row-sub" }, `${formatDate(entry.date)} · Loco ${entry.locomotiveNumberSnapshot || "—"}`),
-          badges.length ? el("div", { class: "list-row-badges" }, badges) : null,
-        ]),
+    currentPageIndex = Math.max(0, Math.min(currentPageIndex, filteredEntries.length - 1));
+    const entry = filteredEntries[currentPageIndex];
+    const movementLabel = entry.movementType === "arrival" ? "Arrival Movement" : "Departure Movement";
+    const badges = [];
+    if (entry.isDraft === true) badges.push(el("span", { class: "badge warn" }, "Draft"));
+    if (entry.acStatus && entry.acStatus !== ACStatus.WORKING) badges.push(el("span", { class: "badge warn" }, "AC Alert"));
+    if (entry.uicStatus === UICStatus.MODIFIED) badges.push(el("span", { class: "badge" }, "UIC Modified"));
+
+    const page = el("article", { class: "diary-entry-page" });
+    page.appendChild(el("div", { class: "diary-binding", "aria-hidden": "true" },
+      Array.from({ length: 9 }, () => el("span", {}))
+    ));
+    page.appendChild(el("header", { class: "diary-page-header" }, [
+      el("div", {}, [
+        el("div", { class: "diary-kicker" }, movementLabel),
+        el("h2", {}, `${entry.trainNumber || "Train —"}${entry.trainName ? ` · ${entry.trainName}` : ""}`),
+        el("div", { class: "diary-date" }, `${formatDate(entry.date)} · Loco ${entry.locomotiveNumberSnapshot || "—"}`),
+      ]),
+      el("div", { class: "diary-page-number" }, `Page ${currentPageIndex + 1}`),
+    ]));
+    if (badges.length) page.appendChild(el("div", { class: "diary-badges" }, badges));
+
+    page.appendChild(diarySection("Train & Locomotive", [
+      ["Movement", movementLabel],
+      ["Date", formatDate(entry.date)],
+      ["Train Number", entry.trainNumber],
+      ["Train Name", entry.trainName],
+      ["Loco No.", entry.locomotiveNumberSnapshot],
+      ["Type", entry.locomotiveType],
+      ["Shed", entry.locomotiveShed],
+      ["Cab", entry.cabSelection],
+      ["PT Type", entry.locomotivePTType],
+    ]));
+
+    const additionalLocomotives = (entry.additionalLocomotives || []).map((loco, index) => [
+      `${loco.role || "Additional Loco"} ${index + 1}`,
+      [loco.locomotiveNumberSnapshot, loco.locomotiveType, loco.locomotiveShed, loco.cabSelection, loco.ptType].filter(Boolean).join(" · "),
+    ]);
+    page.appendChild(diarySection("Additional Locomotives", additionalLocomotives));
+
+    page.appendChild(diarySection("Schedules", [
+      ["Major Schedule", [entry.majorScheduleTypeCode, entry.majorScheduleDate ? formatDate(entry.majorScheduleDate) : ""].filter(Boolean).join(" · ")],
+      ["Minor Schedules", minorScheduleSummary(entry)],
+    ]));
+
+    page.appendChild(diarySection("Loco Components", [
+      ["SR Make", entry.srMake === "Other" ? entry.srMakeOther : entry.srMake],
+      ["BUR Make", entry.burMake === "Other" ? entry.burMakeOther : entry.burMake],
+      ["HOG Make", entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake],
+      ["HOG Status", entry.hogStatus],
+      ["UIC", entry.uicStatus],
+      ["Cable Connected", entry.uicCableConnected],
+      ["RTIS", [entry.rtisFitted, entry.rtisStatus].filter(Boolean).join(" · ")],
+      ["AC", [entry.acFitted, entry.acStatus].filter(Boolean).join(" · ")],
+      ["KAVACH", [entry.kavachMake, entry.kavachStatus].filter(Boolean).join(" · ")],
+      ["Brake System", entry.brakeSystem],
+      ["SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake],
+      ["MC Status", entry.mcStatus],
+      ["UBA DJ Open", entry.ubaDjOpen],
+      ["UBA DJ Closed", entry.ubaDjClosed],
+      ["Spare Items", spareItemsSummary(entry)],
+    ]));
+
+    const movementRows = TIMELINE_STEPS.map((step) => [step.label, entry[step.key] ? formatTime(entry[step.key]) : "—"]);
+    movementRows.push(
+      ["Takeover Place", entry.locoTakeoverPlace],
+      ["Loco Offer Place", entry.locoOfferPlace === "Other" ? entry.locoOfferPlaceOther : entry.locoOfferPlace],
+      ["Engine on Train Place", entry.engineOnTrainPlace],
+      ["HOG Attached Place", entry.hogAttachedPlace],
+      ["BP/FP Place", entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace],
+      ["Yard Signal", entry.yardSignal],
+      ["PF No.", entry.placementPfNumber],
+      ["Made Over Charge", [entry.madeOverChargeName, entry.madeOverChargeHQ].filter(Boolean).join(" · ")],
+    );
+    page.appendChild(diarySection(entry.movementType === "arrival" ? "Arrival Details" : "Timeline of Working", movementRows));
+
+    const privateRows = (entry.privateNumberDetails || [])
+      .filter((detail) => detail.signalNumber || detail.fromLine || detail.toLine || detail.departureTime || detail.yardMasterName || detail.pmName)
+      .map((detail, index) => [
+        `Private Number ${index + 1}`,
+        [
+          detail.signalNumber ? `Signal ${detail.signalNumber}` : "",
+          [detail.fromLine, detail.toLine].filter(Boolean).join(" → "),
+          detail.departureTime ? formatTime(detail.departureTime) : "",
+          detail.yardMasterName ? `YM ${detail.yardMasterName}` : "",
+          detail.pmName ? `PM ${detail.pmName}` : "",
+        ].filter(Boolean).join(" · "),
       ]);
-      listWrap.appendChild(row);
-    }
+    page.appendChild(diarySection("Private Number Details", privateRows));
+
+    const officialRows = (entry.officialDetails || [])
+      .filter((official) => official.designation || official.name)
+      .map((official, index) => [`Official ${index + 1}`, [official.designation, official.name].filter(Boolean).join(" · ")]);
+    page.appendChild(diarySection("Officials", officialRows));
+    page.appendChild(diarySection("Remarks", [["Remarks", entry.remarks || "No remarks"]]));
+
+    const actionRow = el("div", { class: "diary-page-actions" }, [
+      el("button", { class: "primary-btn diary-edit-btn", type: "button", onclick: () => showForm(container, setHeaderTitle, entry.id) }, "✎ Edit Movement"),
+      actionButton("Share", "share", () => openExportCard(entry, locomotives)),
+      actionButton("Delete", "delete", async () => {
+        if (!confirm("Delete this movement from History?")) return;
+        await DB.delete("dutyEntries", entry.id);
+        allEntries = allEntries.filter((candidate) => candidate.id !== entry.id);
+        filteredEntries = filteredEntries.filter((candidate) => candidate.id !== entry.id);
+        currentPageIndex = Math.max(0, currentPageIndex - 1);
+        renderDiaryPage();
+      }, "danger"),
+    ]);
+    page.appendChild(actionRow);
+    listWrap.appendChild(page);
+
+    const previousButton = el("button", {
+      class: "secondary-btn diary-nav-btn",
+      type: "button",
+      onclick: () => { currentPageIndex -= 1; renderDiaryPage(); container.scrollIntoView({ behavior: "smooth", block: "start" }); },
+    }, "← Previous");
+    previousButton.disabled = currentPageIndex === 0;
+    const nextButton = el("button", {
+      class: "secondary-btn diary-nav-btn",
+      type: "button",
+      onclick: () => { currentPageIndex += 1; renderDiaryPage(); container.scrollIntoView({ behavior: "smooth", block: "start" }); },
+    }, "Next →");
+    nextButton.disabled = currentPageIndex >= filteredEntries.length - 1;
+    listWrap.appendChild(el("nav", { class: "diary-navigation", "aria-label": "Movement diary pages" }, [
+      previousButton,
+      el("span", { class: "diary-page-count" }, `${currentPageIndex + 1} of ${filteredEntries.length}`),
+      nextButton,
+    ]));
   }
 
   fromInput.onchange = applyFilterAndRender;
   toInput.onchange = applyFilterAndRender;
   searchInput.oninput = applyFilterAndRender;
-  renderRows(allEntries);
+  renderDiaryPage();
 
   const fab = el("button", {
     class: "fab",
