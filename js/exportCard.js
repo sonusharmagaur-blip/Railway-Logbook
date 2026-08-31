@@ -130,7 +130,12 @@ function drawCard(canvas, fields, backgroundImage, lpsName) {
       return cellPadding * 2 + labelSize + 6 + lines.length * valueLineHeight;
     }));
   });
-  const bodyHeight = rowHeights.reduce((a, b) => a + b, 0) + Math.max(0, rows.length - 1) * cellGap;
+  const topRowCount = Math.min(4, rows.length);
+  const bottomRowCount = Math.max(0, rows.length - topRowCount);
+  const topRowsHeight = rowHeights.slice(0, topRowCount).reduce((a, b) => a + b, 0)
+    + Math.max(0, topRowCount - 1) * cellGap;
+  const bottomRowsHeight = rowHeights.slice(topRowCount).reduce((a, b) => a + b, 0)
+    + Math.max(0, bottomRowCount - 1) * cellGap;
   const totalHeight = CARD_HEIGHT;
 
   canvas.width = CARD_WIDTH * SCALE;
@@ -183,9 +188,13 @@ function drawCard(canvas, fields, backgroundImage, lpsName) {
   ctx.font = `650 9px ${FONT_STACK}`;
   ctx.fillText("RAILWAY LOGBOOK · MOBILE DUTY CARD", 103, 86);
 
-  // Anchor details near the lower half so the full portrait remains the hero.
-  let y = Math.max(headerHeight + bodyInset, totalHeight - bodyHeight - 72);
+  // Split the seven detail rows around the locomotive: four rows at the top
+  // and the remaining rows at the bottom leave a clear portrait window.
+  let topY = headerHeight + bodyInset;
+  let bottomY = Math.max(topY + topRowsHeight + 72, totalHeight - bottomRowsHeight - 28);
   rows.forEach((row, rowIndex) => {
+    const isTopRow = rowIndex < topRowCount;
+    const y = isTopRow ? topY : bottomY;
     const rowHeight = rowHeights[rowIndex];
     const cellWidth = row.length === 1 ? innerWidth : columnWidth;
     row.forEach((field, columnIndex) => {
@@ -209,7 +218,8 @@ function drawCard(canvas, fields, backgroundImage, lpsName) {
         ctx.fillText(line, x + cellPadding, labelY + 5 + (lineIndex + 1) * valueLineHeight);
       });
     });
-    y += rowHeight + cellGap;
+    if (isTopRow) topY += rowHeight + cellGap;
+    else bottomY += rowHeight + cellGap;
   });
 
   ctx.strokeStyle = "rgba(255, 207, 137, 0.88)";
