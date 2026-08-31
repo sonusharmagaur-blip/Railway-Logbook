@@ -521,11 +521,11 @@ html, body {
   padding: 13px 16px;
   border: 0;
   border-radius: 9px;
-  background: var(--maroon-dark);
+  background: #237a3b;
   color: white;
   font-size: 15px;
   font-weight: 750;
-  box-shadow: 0 4px 12px rgba(92, 22, 16, .2);
+  box-shadow: 0 4px 12px rgba(35, 122, 59, .22);
   cursor: pointer;
 }
 .final-done-btn::before { content: "✓ "; }
