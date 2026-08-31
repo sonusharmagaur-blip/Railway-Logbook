@@ -67,7 +67,7 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
   filters.appendChild(el("div", { class: "form-section-title" }, "Search Saved Records"));
 
   const staffFilter = el("select", { "aria-label": "Filter by staff name" }, [
-    el("option", { value: "" }, "All Staff"),
+    el("option", { value: "" }, "Recent Records"),
   ]);
   const filterNames = [...new Set([
     ...staffMembers.map((member) => member.name),
@@ -75,12 +75,8 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
   ])].sort((a, b) => a.localeCompare(b));
   for (const name of filterNames) staffFilter.appendChild(el("option", { value: name }, name));
 
-  const fromDate = el("input", { type: "date", "aria-label": "From date" });
-  const toDate = el("input", { type: "date", "aria-label": "To date" });
-  filters.appendChild(el("div", { class: "adjustment-filter-grid" }, [
+  filters.appendChild(el("div", { class: "adjustment-filter-grid adjustment-staff-search-grid" }, [
     el("div", { class: "adjustment-field" }, [el("label", {}, "Staff Name"), staffFilter]),
-    el("div", { class: "adjustment-field" }, [el("label", {}, "From Date"), fromDate]),
-    el("div", { class: "adjustment-field" }, [el("label", {}, "To Date"), toDate]),
   ]));
   page.appendChild(filters);
 
@@ -91,46 +87,39 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
 
   function renderRecords() {
     const selectedName = staffFilter.value;
-    const start = fromDate.value;
-    const end = toDate.value;
-    const records = allRecords
+    let records = allRecords
       .filter((record) => !selectedName || record.staffName === selectedName)
-      .filter((record) => !start || record.date >= start)
-      .filter((record) => !end || record.date <= end)
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || ""));
 
-    resultSummary.textContent = `${records.length} record${records.length === 1 ? "" : "s"}`;
+    if (!selectedName) records = records.slice(0, 3);
+    resultSummary.textContent = selectedName
+      ? `${records.length} record${records.length === 1 ? "" : "s"} for ${selectedName}`
+      : `Latest ${records.length} record${records.length === 1 ? "" : "s"}`;
     recordsHolder.innerHTML = "";
     if (!records.length) {
       recordsHolder.appendChild(el("div", { class: "empty-state adjustment-empty" }, allRecords.length
-        ? "No records match these filters."
+        ? "No records found for this staff member."
         : "No duty adjustment records yet. Tap + to add one."));
       return;
     }
     for (const record of records) {
-      recordsHolder.appendChild(el("article", { class: "card adjustment-record-card" }, [
-        el("div", { class: "adjustment-record-head" }, [
-          el("div", {}, [
-            el("div", { class: "adjustment-record-name" }, record.staffName || "Staff not selected"),
-            el("div", { class: "adjustment-record-date" }, formatDate(record.date) || "—"),
+      recordsHolder.appendChild(el("article", { class: "adjustment-record-row" }, [
+        el("div", { class: "adjustment-record-date" }, formatDate(record.date) || "—"),
+        el("div", { class: "adjustment-record-main" }, [
+          el("div", { class: "adjustment-record-name" }, record.staffName || "Staff not selected"),
+          el("div", { class: "adjustment-record-route" }, [
+            el("span", {}, record.originalPosition || "—"),
+            el("span", { class: "adjustment-position-arrow", "aria-hidden": "true" }, "→"),
+            el("span", {}, record.adjustedPosition || "—"),
           ]),
-          el("span", { class: "badge adjustment-type-badge" }, displayAdjustmentType(record)),
+          record.remark ? el("div", { class: "adjustment-record-remark" }, record.remark) : null,
         ]),
-        el("div", { class: "adjustment-position-line" }, [
-          el("span", { class: "adjustment-position-label" }, "Original"),
-          el("strong", {}, record.originalPosition || "—"),
-          el("span", { class: "adjustment-position-arrow", "aria-hidden": "true" }, "→"),
-          el("span", { class: "adjustment-position-label" }, "Adjusted"),
-          el("strong", {}, record.adjustedPosition || "—"),
-        ]),
-        record.remark ? el("div", { class: "adjustment-record-remark" }, `Remark: ${record.remark}`) : null,
+        el("span", { class: "badge adjustment-type-badge" }, displayAdjustmentType(record)),
       ]));
     }
   }
 
   staffFilter.addEventListener("change", renderRecords);
-  fromDate.addEventListener("change", renderRecords);
-  toDate.addEventListener("change", renderRecords);
   renderRecords();
   container.appendChild(page);
 
