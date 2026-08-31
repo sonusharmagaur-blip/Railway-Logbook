@@ -5,7 +5,7 @@ import { el, formatDate, formatTime } from "./util.js";
 
 const SCALE = 3; // render at 3x for a crisp shareable image
 const CARD_WIDTH = 390;
-const WATERMARK_URL = new URL("../wap7-share-watermark.png", import.meta.url).href;
+const WATERMARK_URL = new URL("../wap7-share-background-v2.png", import.meta.url).href;
 
 const COLORS = {
   headerBg: "#7b1e14",
@@ -51,7 +51,6 @@ function buildFields(entry, locomotives, profile) {
       { label: "Stable Time", value: entry.shuntingStableTime ? formatTime(entry.shuntingStableTime) : "—" },
       { label: "Stable Place", value: entry.shuntingStablePlace || "—" },
       { label: "CC Name", value: entry.shuntingCCName || "—" },
-      { label: "LPS Name", value: (profile && profile.name) || "—" },
     ];
   }
 
@@ -59,18 +58,6 @@ function buildFields(entry, locomotives, profile) {
   if (entry.uicStatus === UICStatus.MODIFIED && entry.uicCableOption) {
     uicValue += ` (${entry.uicCableOption})`;
   }
-
-  const privateNumberSummary = (entry.privateNumberDetails || [])
-    .filter((detail) => detail.signalNumber || detail.fromLine || detail.toLine || detail.departureTime || detail.yardMasterName || detail.pmName)
-    .map((detail, index) => {
-      const route = [detail.fromLine, detail.toLine].filter(Boolean).join(" → ");
-      return `#${index + 1} Signal ${detail.signalNumber || "—"}${route ? ` · ${route}` : ""}${detail.departureTime ? ` · ${formatTime(detail.departureTime)}` : ""}`;
-    })
-    .join(" | ") || "None";
-  const officialsSummary = (entry.officialDetails || [])
-    .filter((detail) => detail.designation || detail.name)
-    .map((detail) => `${detail.designation || "Official"}: ${detail.name || "—"}`)
-    .join(" | ") || "None";
 
   return [
     { label: "Movement", value: entry.movementType === "arrival" ? "Arrival" : "Departure" },
@@ -86,15 +73,6 @@ function buildFields(entry, locomotives, profile) {
     { label: "Major Schedule", value: `${entry.majorScheduleTypeCode || "—"}${entry.majorScheduleDate ? " — " + formatDate(entry.majorScheduleDate) : ""}` },
     { label: "Minor Schedule / TI", value: entry.minorScheduleTIDate ? formatDate(entry.minorScheduleTIDate) : "Not available" },
     { label: kmFieldLabel(entry), value: entry.kmSinceLastSchedule != null ? String(entry.kmSinceLastSchedule) : "—" },
-    { label: "Loco Takeover", value: entry.locoTakeoverTime ? formatTime(entry.locoTakeoverTime) : "—" },
-    { label: "Loco Offer", value: entry.locoOfferTime ? formatTime(entry.locoOfferTime) : "—" },
-    { label: "Yard Departure", value: entry.departureTime ? formatTime(entry.departureTime) : "—" },
-    { label: "Placement", value: entry.placementTime ? formatTime(entry.placementTime) : "—" },
-    { label: "Private Number Details", value: privateNumberSummary },
-    { label: "Officials", value: officialsSummary },
-    { label: "Repair List", value: entry.repairList || "—" },
-    { label: "Remarks", value: entry.remarks || "—" },
-    { label: "LPS Name", value: (profile && profile.name) || "—" },
   ];
 }
 
@@ -107,7 +85,7 @@ function loadImage(src) {
   });
 }
 
-function drawCard(canvas, fields, watermarkImage) {
+function drawCard(canvas, fields, watermarkImage, lpsName) {
   const cellPadding = 9;
   const labelSize = 9;
   const valueSize = 13;
@@ -118,7 +96,7 @@ function drawCard(canvas, fields, watermarkImage) {
   const ctx = canvas.getContext("2d");
 
   // Compact two-column cards keep the exported image close to a phone-screen portrait.
-  const fullWidthLabels = new Set(["Train", "Private Number Details", "Officials", "Repair List", "Remarks"]);
+  const fullWidthLabels = new Set(["Train"]);
   const rows = [];
   let pendingField = null;
   for (const field of fields) {
@@ -168,7 +146,7 @@ function drawCard(canvas, fields, watermarkImage) {
     ctx.save();
     roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
     ctx.clip();
-    ctx.globalAlpha = 0.15;
+    ctx.globalAlpha = 0.2;
     ctx.drawImage(watermarkImage, 10, imageY, imageWidth, imageHeight);
     ctx.restore();
   }
@@ -185,8 +163,8 @@ function drawCard(canvas, fields, watermarkImage) {
   ctx.font = "700 19px -apple-system, sans-serif";
   ctx.textBaseline = "alphabetic";
   ctx.fillText("Daily Loco Movement Record", 17, 37);
-  ctx.font = "500 11px -apple-system, sans-serif";
-  ctx.fillText("RAILWAY LOGBOOK • MOBILE DUTY CARD", 17, 57);
+  ctx.font = "600 12px -apple-system, sans-serif";
+  ctx.fillText(`LPS Name ${lpsName}`, 17, 58);
 
   let y = headerHeight + bodyInset;
   rows.forEach((row, rowIndex) => {
@@ -236,12 +214,13 @@ export async function openExportCard(entry, locomotives, options = {}) {
   const profile = await DB.get("profile", "singleton");
   const fields = buildFields(entry, locomotives, profile);
   const watermarkImage = await loadImage(WATERMARK_URL);
+  const lpsName = (profile && profile.name) || "Tripurari Sharma";
 
   const overlay = el("div", { class: "overlay" });
   const canvasWrap = el("div", { class: "duty-card-canvas-wrap" });
   const canvas = el("canvas");
   canvasWrap.appendChild(canvas);
-  drawCard(canvas, fields, watermarkImage);
+  drawCard(canvas, fields, watermarkImage, lpsName);
 
   const shareBtn = el("button", { class: "primary-btn", onclick: async () => {
     canvas.toBlob(async (blob) => {
