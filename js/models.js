@@ -45,6 +45,7 @@ export const BRAKE_SYSTEM_OPTIONS = ["E70", "CCB 2.0", "CCB 1.5"];
 export const SPM_MAKE_OPTIONS = ["MEDHA", "TELPRO", "LAXVEN", "Other"];
 export const LOCO_OFFER_PLACE_OPTIONS = ["SH-329", "SH-306", "SH-182", "SH-184", "SH-307", "Other"];
 export const BP_FP_PLACE_OPTIONS = ["Yard", "PF", "Other"];
+export const OFFICIAL_DESIGNATION_OPTIONS = ["PM", "Power Cabin", "LI Punctuality", "CC"];
 
 // Default schedule types seeded on first launch. User can add more from Settings.
 export const DEFAULT_SCHEDULE_TYPES = ["IA", "IB", "IC", "IOH", "POH", "MOH", "TI"];
@@ -167,6 +168,7 @@ export function newDutyEntry() {
     bpFpPlaceOther: "",
     yardSignal: "",
     privateNumberDetails: [],
+    officialDetails: [],
     placementPfNumber: "",
     madeOverChargeName: "",
     madeOverChargeHQ: "",

@@ -7,7 +7,7 @@ import {
   COMPONENT_UIC_OPTIONS, CABLE_CONNECTED_OPTIONS,
   FITTED_OPTIONS, RTIS_COMPONENT_STATUS_OPTIONS, AC_COMPONENT_STATUS_OPTIONS,
   KAVACH_MAKE_OPTIONS, KAVACH_STATUS_OPTIONS, BRAKE_SYSTEM_OPTIONS, SPM_MAKE_OPTIONS,
-  LOCO_OFFER_PLACE_OPTIONS, BP_FP_PLACE_OPTIONS,
+  LOCO_OFFER_PLACE_OPTIONS, BP_FP_PLACE_OPTIONS, OFFICIAL_DESIGNATION_OPTIONS,
   newAdditionalLocomotive, newMinorSchedule, UICCableOption,
 } from "./models.js";
 import { AutosaveController, wireLifecycleFlush } from "./autosave.js";
@@ -54,6 +54,7 @@ function isEntryEmpty(entry) {
   if ((entry.privateNumberDetails || []).some((detail) =>
     detail.signalNumber || detail.fromLine || detail.toLine || detail.departureTime || detail.yardMasterName || detail.pmName
   )) return false;
+  if ((entry.officialDetails || []).some((detail) => detail.designation || detail.name)) return false;
   if (entry.placementPfNumber || entry.madeOverChargeName || entry.madeOverChargeHQ) return false;
   if (entry.spareItems && (
     entry.spareItems.otherText ||
@@ -76,6 +77,49 @@ function sanitizeShedCode(value) {
 function canonicalLocomotiveType(value) {
   const normalized = String(value || "").trim().toUpperCase();
   return LOCOMOTIVE_TYPE_OPTIONS.find((option) => option.toUpperCase() === normalized) || "";
+}
+
+function fieldIconForLabel(label) {
+  const value = String(label || "").toLowerCase();
+  if (value.includes("train")) return "🚆";
+  if (value.includes("loco")) return "🚂";
+  if (value.includes("date")) return "📅";
+  if (value.includes("signal")) return "🚦";
+  if (value.includes("time") || value.includes("upto") || value.includes("attached") || value === "yard dep") return "🕒";
+  if (value.includes("shed")) return "🏭";
+  if (value.includes("cab")) return "🚪";
+  if (value.includes("pt type")) return "⚡";
+  if (value.includes("rtis")) return "📡";
+  if (value.includes("kavach")) return "🛡️";
+  if (value.includes("brake")) return "🛑";
+  if (value.includes("spm")) return "📟";
+  if (value.includes("uic") || value.includes("cable")) return "🔌";
+  if (value === "ac" || value.startsWith("ac status")) return "❄️";
+  if (value.includes("spare")) return "📦";
+  if (value.includes("name") || value.includes("designation") || value.includes("charge")) return "👤";
+  if (value.includes("place") || value.includes("line") || value.includes("pf no") || value === "hq") return "📍";
+  if (value.includes("km")) return "🛣️";
+  if (value === "search") return "🔎";
+  if (value === "from" || value === "to") return "↔";
+  if (value.includes("status")) return "✓";
+  if (value.includes("make") || value === "type" || value.includes("system")) return "⚙️";
+  if (value.includes("uba dj")) return "⚡";
+  return "•";
+}
+
+function fieldLabel(label, attrs = {}) {
+  const classes = [attrs.class, "field-label-with-icon"].filter(Boolean).join(" ");
+  return el("label", { ...attrs, class: classes }, [
+    el("span", { class: "field-label-icon", "aria-hidden": "true" }, fieldIconForLabel(label)),
+    el("span", {}, label),
+  ]);
+}
+
+function fieldCaption(label) {
+  return el("span", { class: "field-caption-with-icon" }, [
+    el("span", { class: "field-label-icon", "aria-hidden": "true" }, fieldIconForLabel(label)),
+    el("span", {}, label),
+  ]);
 }
 
 function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
@@ -234,9 +278,9 @@ async function showList(container, setHeaderTitle) {
   const fromInput = el("input", { type: "date" });
   const toInput = el("input", { type: "date" });
   const searchInput = el("input", { type: "text", placeholder: "Search train no. / name / loco" });
-  filterCard.appendChild(el("div", { class: "form-row" }, [el("label", {}, "From"), fromInput]));
-  filterCard.appendChild(el("div", { class: "form-row" }, [el("label", {}, "To"), toInput]));
-  filterCard.appendChild(el("div", { class: "form-row" }, [el("label", {}, "Search"), searchInput]));
+  filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("From"), fromInput]));
+  filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("To"), toInput]));
+  filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("Search"), searchInput]));
   container.appendChild(filterCard);
 
   const listWrap = el("div", {});
@@ -368,6 +412,13 @@ async function showForm(container, setHeaderTitle, entryId) {
     if (detail.pmName === undefined) detail.pmName = "";
     if (detail.isComplete === undefined) detail.isComplete = true;
   }
+  if (!Array.isArray(entry.officialDetails)) entry.officialDetails = [];
+  for (const detail of entry.officialDetails) {
+    if (!detail.id) detail.id = crypto.randomUUID();
+    if (!OFFICIAL_DESIGNATION_OPTIONS.includes(detail.designation)) detail.designation = OFFICIAL_DESIGNATION_OPTIONS[0];
+    if (detail.name === undefined) detail.name = "";
+    if (detail.isComplete === undefined) detail.isComplete = true;
+  }
   if (entry.placementPfNumber === undefined) entry.placementPfNumber = "";
   if (entry.madeOverChargeName === undefined) entry.madeOverChargeName = "";
   if (entry.madeOverChargeHQ === undefined) entry.madeOverChargeHQ = "";
@@ -474,19 +525,19 @@ async function showForm(container, setHeaderTitle, entryId) {
   const tripSection = el("div", { class: "form-section" });
   tripSection.appendChild(el("div", { class: "form-section-title" }, "Trip Info"));
   tripSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "Date"),
+    fieldLabel("Date"),
     el("input", { type: "date", value: entry.date || todayDateInputValue(), onchange: (e) => { entry.date = e.target.value; onFieldChange(); } }),
   ]));
   tripSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "Train Number"),
+    fieldLabel("Train Number"),
     el("input", { type: "text", value: entry.trainNumber || "", oninput: (e) => { entry.trainNumber = e.target.value; onFieldChange(); } }),
   ]));
   tripSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "Train Name"),
+    fieldLabel("Train Name"),
     el("input", { type: "text", value: entry.trainName || "", oninput: (e) => { entry.trainName = e.target.value; onFieldChange(); } }),
   ]));
   const locomotiveRow = el("div", { class: "form-row locomotive-row" });
-  locomotiveRow.appendChild(el("label", { class: "locomotive-heading" }, "Locomotive"));
+  locomotiveRow.appendChild(fieldLabel("Locomotive", { class: "locomotive-heading" }));
 
   const recallNote = el("div", { class: "loco-recall-note hidden" }, "Previous details found — type and shed filled.");
   const typeSelect = el("select", { "aria-label": "Locomotive type" });
@@ -546,9 +597,9 @@ async function showForm(container, setHeaderTitle, entryId) {
   });
 
   const fieldsGrid = el("div", { class: "locomotive-fields" }, [
-    el("div", { class: "locomotive-field" }, [el("span", {}, "Loco No."), numberInput]),
-    el("div", { class: "locomotive-field" }, [el("span", {}, "Type"), typeSelect]),
-    el("div", { class: "locomotive-field" }, [el("span", {}, "Shed"), shedInput]),
+    el("div", { class: "locomotive-field" }, [fieldCaption("Loco No."), numberInput]),
+    el("div", { class: "locomotive-field" }, [fieldCaption("Type"), typeSelect]),
+    el("div", { class: "locomotive-field" }, [fieldCaption("Shed"), shedInput]),
   ]);
   locomotiveRow.appendChild(fieldsGrid);
   locomotiveRow.appendChild(recallNote);
@@ -569,8 +620,8 @@ async function showForm(container, setHeaderTitle, entryId) {
   });
   tripSection.appendChild(el("div", { class: "form-row cab-pt-row" }, [
     el("div", { class: "cab-pt-grid" }, [
-      el("div", { class: "cab-pt-field" }, [el("label", {}, "Cab"), cabSelect]),
-      el("div", { class: "cab-pt-field" }, [el("label", {}, "PT Type"), ptTypeSelect]),
+      el("div", { class: "cab-pt-field" }, [fieldLabel("Cab"), cabSelect]),
+      el("div", { class: "cab-pt-field" }, [fieldLabel("PT Type"), ptTypeSelect]),
     ]),
   ]));
 
@@ -673,14 +724,14 @@ async function showForm(container, setHeaderTitle, entryId) {
           }, "Remove"),
         ]),
         el("div", { class: "locomotive-fields" }, [
-          el("div", { class: "locomotive-field" }, [el("span", {}, "Loco No."), additionalNumberInput]),
-          el("div", { class: "locomotive-field" }, [el("span", {}, "Type"), additionalTypeSelect]),
-          el("div", { class: "locomotive-field" }, [el("span", {}, "Shed"), additionalShedInput]),
+          el("div", { class: "locomotive-field" }, [fieldCaption("Loco No."), additionalNumberInput]),
+          el("div", { class: "locomotive-field" }, [fieldCaption("Type"), additionalTypeSelect]),
+          el("div", { class: "locomotive-field" }, [fieldCaption("Shed"), additionalShedInput]),
         ]),
         additionalRecallNote,
         el("div", { class: "cab-pt-grid additional-cab-pt-grid" }, [
-          el("div", { class: "cab-pt-field" }, [el("label", {}, "Cab"), additionalCabSelect]),
-          el("div", { class: "cab-pt-field" }, [el("label", {}, "PT Type"), additionalPTTypeSelect]),
+          el("div", { class: "cab-pt-field" }, [fieldLabel("Cab"), additionalCabSelect]),
+          el("div", { class: "cab-pt-field" }, [fieldLabel("PT Type"), additionalPTTypeSelect]),
         ]),
       ]);
       additionalLocomotivesHolder.appendChild(additionalCard);
@@ -762,8 +813,8 @@ async function showForm(container, setHeaderTitle, entryId) {
     },
   });
   majorScheduleSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields" }, [
-    el("div", { class: "schedule-field" }, [el("label", {}, "Type"), majorTypeSelect]),
-    el("div", { class: "schedule-field" }, [el("label", {}, "Date"), majorDateInput]),
+    el("div", { class: "schedule-field" }, [fieldLabel("Type"), majorTypeSelect]),
+    el("div", { class: "schedule-field" }, [fieldLabel("Date"), majorDateInput]),
   ]));
   majorScheduleSection.appendChild(majorOverdueAlert);
   renderMajorScheduleAlert();
@@ -824,14 +875,14 @@ async function showForm(container, setHeaderTitle, entryId) {
         ]),
         el("div", { class: "schedule-fields-grid minor-schedule-fields" }, [
           el("div", { class: "schedule-field" }, [
-            el("label", {}, "Type"),
+            fieldLabel("Type"),
             createDropdown(MINOR_SCHEDULE_TYPE_OPTIONS, schedule.type, (value) => {
               schedule.type = value;
               onFieldChange();
             }, { "aria-label": `Minor schedule ${scheduleNumber} type` }),
           ]),
           el("div", { class: "schedule-field" }, [
-            el("label", {}, "Date"),
+            fieldLabel("Date"),
             el("input", {
               type: "date",
               value: schedule.date || "",
@@ -843,7 +894,7 @@ async function showForm(container, setHeaderTitle, entryId) {
               },
             }),
           ]),
-          el("div", { class: "schedule-field" }, [el("label", {}, "KM"), kmInput, kmAlert]),
+          el("div", { class: "schedule-field" }, [fieldLabel("KM"), kmInput, kmAlert]),
         ]),
       ]);
       minorSchedulesHolder.appendChild(scheduleCard);
@@ -896,7 +947,7 @@ async function showForm(container, setHeaderTitle, entryId) {
     renderManualInput();
 
     return el("div", { class: "schedule-field component-field" }, [
-      el("label", {}, label),
+      fieldLabel(label),
       select,
       manualInput,
     ]);
@@ -923,11 +974,11 @@ async function showForm(container, setHeaderTitle, entryId) {
   }, { "aria-label": "Cable connected" });
   const uicCableComponentRow = el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
     el("div", { class: "schedule-field component-field" }, [
-      el("label", {}, "UIC"),
+      fieldLabel("UIC"),
       componentUICSelect,
     ]),
     el("div", { class: "schedule-field component-field" }, [
-      el("label", {}, "Cable Connected"),
+      fieldLabel("Cable Connected"),
       cableConnectedSelect,
     ]),
   ]);
@@ -950,7 +1001,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
     createMakeField("HOG Make", "hogMake", "hogMakeOther", HOG_MAKE_OPTIONS, renderHogDependentFields),
     el("div", { class: "schedule-field component-field" }, [
-      el("label", {}, "HOG Status"),
+      fieldLabel("HOG Status"),
       createDropdown(HOG_STATUS_OPTIONS, entry.hogStatus, (value) => {
         entry.hogStatus = value;
         onFieldChange();
@@ -962,7 +1013,7 @@ async function showForm(container, setHeaderTitle, entryId) {
 
   function createComponentDropdownField(label, fieldKey, options) {
     return el("div", { class: "schedule-field component-field" }, [
-      el("label", {}, label),
+      fieldLabel(label),
       createDropdown(options, entry[fieldKey], (value) => {
         entry[fieldKey] = value;
         onFieldChange();
@@ -972,7 +1023,7 @@ async function showForm(container, setHeaderTitle, entryId) {
 
   function createManualComponentField(label, fieldKey) {
     return el("div", { class: "schedule-field component-field" }, [
-      el("label", {}, label),
+      fieldLabel(label),
       el("input", {
         type: "text",
         value: entry[fieldKey] || "",
@@ -1057,7 +1108,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   renderSpareOtherInput();
   componentSection.appendChild(el("div", { class: "schedule-fields-grid component-details-row single-component-row" }, [
     el("div", { class: "schedule-field component-field spare-items-field" }, [
-      el("label", {}, "Spare Items Available"),
+      fieldLabel("Spare Items Available"),
       spareChecklist,
       spareOtherInput,
     ]),
@@ -1098,7 +1149,7 @@ async function showForm(container, setHeaderTitle, entryId) {
 
   function createMovementTimeField(label, fieldKey) {
     return el("div", { class: "movement-detail-field" }, [
-      el("label", {}, label),
+      fieldLabel(label),
       createTimeField(entry.date, entry[fieldKey], (value) => {
         entry[fieldKey] = value;
         onFieldChange();
@@ -1108,7 +1159,7 @@ async function showForm(container, setHeaderTitle, entryId) {
 
   function createMovementManualField(label, fieldKey, placeholder = "Enter details") {
     return el("div", { class: "movement-detail-field" }, [
-      el("label", {}, label),
+      fieldLabel(label),
       el("input", {
         type: "text",
         value: entry[fieldKey] || "",
@@ -1128,7 +1179,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       el("option", { value })
     ));
     return el("div", { class: "movement-detail-field" }, [
-      el("label", {}, label),
+      fieldLabel(label),
       el("input", {
         type: "text",
         value: entry[fieldKey] || "",
@@ -1167,7 +1218,7 @@ async function showForm(container, setHeaderTitle, entryId) {
     }, { "aria-label": label });
     renderOtherInput();
     return el("div", { class: "movement-detail-field" }, [
-      el("label", {}, label),
+      fieldLabel(label),
       select,
       otherInput,
     ]);
@@ -1262,7 +1313,7 @@ async function showForm(container, setHeaderTitle, entryId) {
 
     function createPrivateNumberInput(label, fieldKey, placeholder) {
       return el("div", { class: "movement-detail-field" }, [
-        el("label", {}, label),
+        fieldLabel(label),
         el("input", {
           type: "text",
           value: detail[fieldKey] || "",
@@ -1282,7 +1333,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       createPrivateNumberInput("From Line", "fromLine", "From line"),
       createPrivateNumberInput("To Line", "toLine", "To line"),
       el("div", { class: "movement-detail-field" }, [
-        el("label", {}, "Dep Time"),
+        fieldLabel("Dep Time"),
         createTimeField(entry.date, detail.departureTime, (value) => {
           detail.departureTime = value;
           onFieldChange();
@@ -1328,6 +1379,130 @@ async function showForm(container, setHeaderTitle, entryId) {
   privateNumberFab.addEventListener("click", openPrivateNumberPrompt);
   renderPrivateNumberFab();
   remainingDetailsPage.appendChild(privateNumberFab);
+
+  const officialsCount = el("span", { class: "private-number-fab-count hidden" }, "0");
+  const officialsFab = el("button", {
+    class: "officials-fab",
+    type: "button",
+    "aria-label": "Add Officials",
+  }, [
+    el("span", { class: "private-number-fab-plus" }, "+"),
+    el("span", { class: "private-number-fab-label" }, "OFF"),
+    officialsCount,
+  ]);
+
+  function renderOfficialsFab() {
+    const count = entry.officialDetails.length;
+    officialsCount.textContent = String(count);
+    officialsCount.classList.toggle("hidden", count === 0);
+  }
+
+  function recentOfficialNames(excludeId) {
+    const seen = new Set();
+    const records = [
+      entry,
+      ...allDutyEntries
+        .filter((candidate) => candidate.id !== entry.id)
+        .sort((a, b) => (b.lastModified || "").localeCompare(a.lastModified || "")),
+    ];
+    return records
+      .flatMap((candidate) => Array.isArray(candidate.officialDetails) ? candidate.officialDetails : [])
+      .filter((candidate) => candidate.id !== excludeId)
+      .map((candidate) => String(candidate.name || "").trim())
+      .filter((value) => {
+        const normalized = value.toUpperCase();
+        if (!value || seen.has(normalized)) return false;
+        seen.add(normalized);
+        return true;
+      })
+      .slice(0, 12);
+  }
+
+  function openOfficialsPrompt() {
+    let official = entry.officialDetails.find((candidate) => candidate.isComplete !== true);
+    if (!official) {
+      official = {
+        id: crypto.randomUUID(),
+        designation: OFFICIAL_DESIGNATION_OPTIONS[0],
+        name: "",
+        isComplete: false,
+      };
+      entry.officialDetails.push(official);
+      renderOfficialsFab();
+      onFieldChange();
+    }
+
+    const overlay = el("div", { class: "overlay" });
+    const closeButton = el("button", {
+      class: "icon-btn",
+      type: "button",
+      "aria-label": "Close Add Officials",
+      onclick: () => overlay.remove(),
+    }, "×");
+    const officialNumber = entry.officialDetails.indexOf(official) + 1;
+    const designationField = el("div", { class: "movement-detail-field" }, [
+      fieldLabel("Designation"),
+      createDropdown(OFFICIAL_DESIGNATION_OPTIONS, official.designation, (value) => {
+        official.designation = value;
+        onFieldChange();
+      }, { "aria-label": "Designation" }),
+    ]);
+    const officialNameHistoryId = `official-name-history-${entry.id}-${official.id}`;
+    const officialNameField = el("div", { class: "movement-detail-field" }, [
+      fieldLabel("Name"),
+      el("input", {
+        type: "text",
+        value: official.name || "",
+        placeholder: "Enter or select recent name",
+        list: officialNameHistoryId,
+        autocomplete: "off",
+        "aria-label": "Official Name",
+        oninput: (event) => {
+          official.name = event.target.value;
+          onFieldChange();
+        },
+      }),
+      el("datalist", { id: officialNameHistoryId }, recentOfficialNames(official.id).map((name) =>
+        el("option", { value: name })
+      )),
+    ]);
+    const saveButton = el("button", {
+      class: "primary-btn",
+      type: "button",
+      onclick: () => {
+        official.name = String(official.name || "").trim();
+        if (!official.designation || !official.name) {
+          showToast("Select designation and enter official name.");
+          return;
+        }
+        official.isComplete = true;
+        onFieldChange();
+        renderOfficialsFab();
+        overlay.remove();
+        showToast("Official saved for Step 3.");
+      },
+    }, "Save Official");
+
+    overlay.appendChild(el("div", { class: "overlay-card private-number-dialog officials-dialog" }, [
+      el("div", { class: "private-number-dialog-header" }, [
+        el("div", {}, [
+          el("h2", {}, "Add Officials"),
+          el("p", {}, `Official ${officialNumber} · will appear on Step 3`),
+        ]),
+        closeButton,
+      ]),
+      el("div", { class: "private-number-form-grid officials-form-grid" }, [designationField, officialNameField]),
+      saveButton,
+    ]));
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+  }
+
+  officialsFab.addEventListener("click", openOfficialsPrompt);
+  renderOfficialsFab();
+  container.appendChild(officialsFab);
 
   // --- Remarks ---
   const remarksSection = el("div", { class: "form-section" });
