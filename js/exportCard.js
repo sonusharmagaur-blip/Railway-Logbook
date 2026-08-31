@@ -5,7 +5,7 @@ import { el, formatDate, formatTime } from "./util.js";
 
 const SCALE = 3; // render at 3x for a crisp shareable image
 const CARD_WIDTH = 390;
-const WATERMARK_URL = new URL("../wap7-share-background-v2.png", import.meta.url).href;
+const WATERMARK_URL = new URL("../wap7-watermark-transparent-v3.png", import.meta.url).href;
 
 const COLORS = {
   headerBg: "#7b1e14",
@@ -146,7 +146,7 @@ function drawCard(canvas, fields, watermarkImage, lpsName) {
     ctx.save();
     roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
     ctx.clip();
-    ctx.globalAlpha = 0.2;
+    ctx.globalAlpha = 0.13;
     ctx.drawImage(watermarkImage, 10, imageY, imageWidth, imageHeight);
     ctx.restore();
   }
