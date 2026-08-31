@@ -20,7 +20,7 @@ let currentUnwireLifecycle = null;
 let resumePromptDismissedForSession = false;
 
 function isEntryEmpty(entry) {
-  if (entry.trainNumber || entry.trainName || entry.remarks) return false;
+  if (entry.trainNumber || entry.trainName || entry.repairList || entry.remarks) return false;
   if (entry.locomotiveId || entry.locomotiveNumberSnapshot || entry.locomotiveType || entry.locomotiveShed) return false;
   if (entry.locomotivePTType && entry.locomotivePTType !== PT_TYPE_OPTIONS[0]) return false;
   if ((entry.additionalLocomotives || []).some((loco) =>
@@ -96,6 +96,7 @@ function fieldIconForLabel(label) {
   if (value.includes("uic") || value.includes("cable")) return "🔌";
   if (value === "ac" || value.startsWith("ac status")) return "❄️";
   if (value.includes("spare")) return "📦";
+  if (value.includes("repair")) return "🛠️";
   if (value.includes("name") || value.includes("designation") || value.includes("charge")) return "👤";
   if (value.includes("place") || value.includes("line") || value.includes("pf no") || value === "hq") return "📍";
   if (value.includes("km")) return "🛣️";
@@ -474,6 +475,7 @@ async function showList(container, setHeaderTitle) {
       .filter((official) => official.designation || official.name)
       .map((official, index) => [`Official ${index + 1}`, [official.designation, official.name].filter(Boolean).join(" · ")]);
     page.appendChild(diarySection("Officials", officialRows));
+    page.appendChild(diarySection("Repair List", [["Repair List", entry.repairList || "No repairs recorded"]]));
     page.appendChild(diarySection("Remarks", [["Remarks", entry.remarks || "No remarks"]]));
 
     const actionRow = el("div", { class: "diary-page-actions" }, [
@@ -610,6 +612,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   if (entry.placementPfNumber === undefined) entry.placementPfNumber = "";
   if (entry.madeOverChargeName === undefined) entry.madeOverChargeName = "";
   if (entry.madeOverChargeHQ === undefined) entry.madeOverChargeHQ = "";
+  if (entry.repairList === undefined) entry.repairList = "";
   if (!MAJOR_SCHEDULE_OPTIONS.includes(entry.majorScheduleTypeCode)) entry.majorScheduleTypeCode = MAJOR_SCHEDULE_OPTIONS[0];
   if (!Array.isArray(entry.minorSchedules)) {
     const migratedSchedule = newMinorSchedule();
@@ -1320,6 +1323,22 @@ async function showForm(container, setHeaderTitle, entryId) {
   ]));
   trainLocoPage.appendChild(componentSection);
 
+  // --- Repair List ---
+  const repairListSection = el("div", { class: "form-section" });
+  repairListSection.appendChild(el("div", { class: "form-section-title" }, "Repair List"));
+  repairListSection.appendChild(el("div", { class: "form-row" }, [
+    el("textarea", {
+      value: entry.repairList || "",
+      placeholder: "Enter repair details",
+      "aria-label": "Repair List",
+      oninput: (event) => {
+        entry.repairList = event.target.value;
+        onFieldChange();
+      },
+    }, entry.repairList || ""),
+  ]));
+  trainLocoPage.appendChild(repairListSection);
+
   const isArrivalMovement = entry.movementType === "arrival";
   trainLocoPage.appendChild(el("button", {
     class: "primary-btn",
@@ -1799,6 +1818,14 @@ async function showForm(container, setHeaderTitle, entryId) {
       });
     }
     reviewSubmitPage.appendChild(officialsSection);
+
+    const repairListSection = el("div", { class: "form-section review-section" }, [
+      el("div", { class: "form-section-title" }, "Repair List"),
+      entry.repairList
+        ? el("div", { class: "review-entry-card" }, entry.repairList)
+        : el("div", { class: "review-empty" }, "No repairs recorded."),
+    ]);
+    reviewSubmitPage.appendChild(repairListSection);
 
     const remarksSection = el("div", { class: "form-section" });
     remarksSection.appendChild(el("div", { class: "form-section-title" }, "Remarks"));

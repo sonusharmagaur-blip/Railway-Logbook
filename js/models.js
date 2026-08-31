@@ -120,6 +120,7 @@ export function newDutyEntry() {
     cabSelection: "",
     locomotivePTType: PT_TYPE_OPTIONS[0],
     additionalLocomotives: [],
+    repairList: "",
     remarks: "",
     uicStatus: UICStatus.NORMAL,
     uicCableOption: null,

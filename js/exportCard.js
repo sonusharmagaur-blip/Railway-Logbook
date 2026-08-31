@@ -76,6 +76,7 @@ function buildFields(entry, locomotives, profile) {
     { label: "Placement", value: entry.placementTime ? formatTime(entry.placementTime) : "—" },
     { label: "Private Number Details", value: privateNumberSummary },
     { label: "Officials", value: officialsSummary },
+    { label: "Repair List", value: entry.repairList || "—" },
     { label: "Remarks", value: entry.remarks || "—" },
     { label: "Pilot", value: (profile && profile.name) || "—" },
   ];
@@ -101,7 +102,7 @@ function drawCard(canvas, fields, watermarkImage) {
   const ctx = canvas.getContext("2d");
 
   // Compact two-column cards keep the exported image close to a phone-screen portrait.
-  const fullWidthLabels = new Set(["Train", "Private Number Details", "Officials", "Remarks"]);
+  const fullWidthLabels = new Set(["Train", "Private Number Details", "Officials", "Repair List", "Remarks"]);
   const rows = [];
   let pendingField = null;
   for (const field of fields) {
