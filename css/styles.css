@@ -118,6 +118,23 @@ html, body {
 }
 .form-row:first-of-type { border-top: none; }
 .form-row label { font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+.field-label-with-icon,
+.field-caption-with-icon {
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+}
+.field-label-icon {
+  display: inline-flex;
+  width: 14px;
+  min-width: 14px;
+  align-items: center;
+  justify-content: center;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+  font-size: 11px;
+  line-height: 1;
+  opacity: .82;
+}
 .form-row input[type="text"],
 .form-row input[type="number"],
 .form-row input[type="date"],
@@ -384,9 +401,9 @@ html, body {
 }
 .movement-detail-field .time-clear-btn { padding: 2px; }
 .movement-other-input { margin-top: 6px; }
-.private-number-fab {
+.private-number-fab,
+.officials-fab {
   position: fixed;
-  right: 16px;
   bottom: calc(76px + env(safe-area-inset-bottom));
   z-index: 24;
   width: 58px;
@@ -403,6 +420,12 @@ html, body {
   line-height: 1;
   cursor: pointer;
 }
+.private-number-fab { right: 16px; }
+.officials-fab {
+  right: 84px;
+  background: var(--maroon-dark);
+}
+.officials-fab .private-number-fab-label { font-size: 9px; }
 .private-number-fab-plus { font-size: 20px; font-weight: 800; }
 .private-number-fab-label { margin-top: 1px; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
 .private-number-fab-count {
