@@ -79,6 +79,7 @@ html, body {
   padding: 10px 14px 14px;
 }
 .adjustment-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.adjustment-staff-search-grid { grid-template-columns: minmax(0, 1fr); }
 .adjustment-field { min-width: 0; }
 .adjustment-field label {
   display: block;
@@ -105,15 +106,37 @@ html, body {
   font-size: 12px;
   font-weight: 700;
 }
-.adjustment-record-card { padding: 13px; }
+.adjustment-records { display: grid; gap: 8px; }
+.adjustment-record-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(82, 42, 19, .04);
+}
+.adjustment-record-main { min-width: 0; }
 .adjustment-record-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
 }
-.adjustment-record-name { font-size: 16px; font-weight: 750; }
-.adjustment-record-date { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
+.adjustment-record-name { overflow-wrap: anywhere; font-size: 13px; font-weight: 750; }
+.adjustment-record-date { color: var(--text-muted); font-size: 11px; font-weight: 700; }
+.adjustment-record-route {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+  align-items: center;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .adjustment-type-badge { flex: 0 0 auto; background: #f4e7d5; color: var(--maroon); font-weight: 700; }
 .adjustment-position-line {
   display: grid;
@@ -130,7 +153,7 @@ html, body {
 .adjustment-position-line strong { overflow-wrap: anywhere; }
 .adjustment-position-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; }
 .adjustment-position-arrow { color: var(--maroon); font-size: 16px; font-weight: 800; }
-.adjustment-record-remark { margin-top: 9px; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.adjustment-record-remark { margin-top: 4px; color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; }
 .adjustment-empty { padding-top: 26px; }
 .adjustment-sheet-header { align-items: center; }
 .adjustment-back-btn { padding-left: 0; font-size: 15px; font-weight: 700; }
@@ -206,11 +229,13 @@ html, body {
 @media (max-width: 540px) {
   .adjustment-filter-grid { grid-template-columns: 1fr 1fr; }
   .adjustment-filter-grid .adjustment-field:first-child { grid-column: 1 / -1; }
+  .adjustment-staff-search-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 400px) {
   .tab-btn { font-size: 10px; }
   .adjustment-entry-grid { grid-template-columns: 1fr; }
+  .adjustment-record-row { grid-template-columns: 66px minmax(0, 1fr) auto; gap: 7px; }
   .adjustment-position-line { grid-template-columns: auto minmax(0, 1fr); }
   .adjustment-position-arrow { display: none; }
   .staff-add-row { grid-template-columns: 1fr; }
