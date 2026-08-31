@@ -16,7 +16,7 @@ export async function mountSettingsTab(container, setHeaderTitle) {
   const profileSection = el("div", { class: "form-section" });
   profileSection.appendChild(el("div", { class: "form-section-title" }, "Profile"));
   profileSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "Pilot Name"),
+    el("label", {}, "LPS Name"),
     el("input", { type: "text", value: profile.name || "", oninput: (e) => { profile.name = e.target.value; profileAutosave.fieldChanged(); } }),
   ]));
   container.appendChild(profileSection);
@@ -24,37 +24,12 @@ export async function mountSettingsTab(container, setHeaderTitle) {
   // --- Staff names used by Duty Adjustment Record ---
   const staffSection = el("div", { class: "form-section" });
   staffSection.appendChild(el("div", { class: "form-section-title" }, "Duty Adjustment Staff"));
-  const staffList = el("div", { class: "staff-settings-list" });
   const staffNameInput = el("input", {
     type: "text",
     placeholder: "Enter staff name",
     autocapitalize: "words",
     "aria-label": "New staff name",
   });
-
-  async function renderStaffList() {
-    const staff = (await DB.getAll("staffMembers")).sort((a, b) => a.name.localeCompare(b.name));
-    staffList.innerHTML = "";
-    if (!staff.length) {
-      staffList.appendChild(el("div", { class: "staff-settings-empty" }, "No staff added yet."));
-      return;
-    }
-    for (const member of staff) {
-      staffList.appendChild(el("div", { class: "staff-settings-row" }, [
-        el("span", {}, member.name),
-        el("button", {
-          class: "staff-remove-btn",
-          type: "button",
-          "aria-label": `Remove ${member.name}`,
-          onclick: async () => {
-            if (!confirm(`Remove ${member.name} from the staff dropdown? Saved records will remain unchanged.`)) return;
-            await DB.delete("staffMembers", member.id);
-            await renderStaffList();
-          },
-        }, "Remove"),
-      ]));
-    }
-  }
 
   const addStaffButton = el("button", {
     class: "primary-btn staff-add-btn",
@@ -73,7 +48,6 @@ export async function mountSettingsTab(container, setHeaderTitle) {
       await DB.put("staffMembers", { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() });
       staffNameInput.value = "";
       showToast("Staff added.");
-      await renderStaffList();
     },
   }, "+ Add Staff");
   staffNameInput.addEventListener("keydown", (event) => {
@@ -85,10 +59,8 @@ export async function mountSettingsTab(container, setHeaderTitle) {
   staffSection.appendChild(el("div", { class: "form-row" }, [
     el("label", {}, "Staff Name"),
     el("div", { class: "staff-add-row" }, [staffNameInput, addStaffButton]),
-    staffList,
   ]));
   container.appendChild(staffSection);
-  await renderStaffList();
 
   const scheduleLink = el("div", { class: "card list-row", onclick: () => openScheduleManager(container, setHeaderTitle) }, [
     el("div", { class: "list-row-main" }, [el("div", { class: "list-row-title" }, "Manage Schedule Types")]),

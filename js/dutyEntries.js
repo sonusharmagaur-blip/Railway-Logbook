@@ -21,6 +21,7 @@ let resumePromptDismissedForSession = false;
 
 function isEntryEmpty(entry) {
   if (entry.trainNumber || entry.trainName || entry.repairList || entry.remarks) return false;
+  if (entry.shuntingTocTime || entry.shuntingTocPlace || entry.shuntingMovementUpto || entry.shuntingStableTime || entry.shuntingStablePlace || entry.shuntingCCName) return false;
   if (entry.locomotiveId || entry.locomotiveNumberSnapshot || entry.locomotiveType || entry.locomotiveShed) return false;
   if (entry.locomotivePTType && entry.locomotivePTType !== PT_TYPE_OPTIONS[0]) return false;
   if ((entry.additionalLocomotives || []).some((loco) =>
@@ -198,7 +199,9 @@ export async function mountDutyTab(container, setHeaderTitle) {
 
 function openResumeDraftPrompt(container, setHeaderTitle, entry) {
   const overlay = el("div", { class: "overlay" });
-  const movementLabel = entry.movementType === "arrival" ? "Arrival Movement" : "Departure Movement";
+  const movementLabel = entry.movementType === "shed_shunting"
+    ? "Shed Shunting"
+    : entry.movementType === "arrival" ? "Arrival Movement" : "Departure Movement";
   const recordDetails = [
     movementLabel,
     entry.trainNumber ? `Train ${entry.trainNumber}` : null,
@@ -268,13 +271,26 @@ function openMovementTypePicker(container, setHeaderTitle) {
     },
   }, "Arrival Movement");
 
+  const shedShuntingButton = el("button", {
+    class: "secondary-btn",
+    type: "button",
+    style: "width:100%;",
+    onclick: async () => {
+      overlay.remove();
+      const entry = newDutyEntry();
+      entry.movementType = "shed_shunting";
+      await DB.put("dutyEntries", entry);
+      showForm(container, setHeaderTitle, entry.id);
+    },
+  }, "Shed Shunting");
+
   const card = el("div", { class: "overlay-card" }, [
     el("div", { style: "display:flex;align-items:center;justify-content:space-between;gap:12px;" }, [
       el("h2", {}, "Add Movement"),
       closeButton,
     ]),
     el("p", {}, "Choose the movement record you want to add."),
-    el("div", { style: "display:grid;gap:10px;margin-top:14px;" }, [departureButton, arrivalButton]),
+    el("div", { style: "display:grid;gap:10px;margin-top:14px;" }, [departureButton, arrivalButton, shedShuntingButton]),
   ]);
 
   overlay.appendChild(card);
@@ -286,11 +302,11 @@ function openMovementTypePicker(container, setHeaderTitle) {
 
 async function showList(container, setHeaderTitle) {
   if (currentUnwireLifecycle) { currentUnwireLifecycle(); currentUnwireLifecycle = null; }
-  setHeaderTitle("Movement Diary");
+  setHeaderTitle("Duty Log");
   container.innerHTML = "";
 
   let allEntries = await DB.getAll("dutyEntries");
-  allEntries.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.lastModified || "").localeCompare(a.lastModified || ""));
+  allEntries.sort((a, b) => (b.lastModified || "").localeCompare(a.lastModified || "") || (b.date || "").localeCompare(a.date || ""));
   const locomotives = await DB.getAll("locomotives");
   let filteredEntries = allEntries;
   let currentPageIndex = 0;
@@ -307,9 +323,9 @@ async function showList(container, setHeaderTitle) {
   filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("From"), fromInput]));
   filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("To"), toInput]));
   filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("Search"), searchInput]));
-  container.appendChild(filterCard);
+  // Keep the home screen compact: only recent entries are shown here.
 
-  const listWrap = el("div", { class: "diary-wrap" });
+  const listWrap = el("div", { class: "recent-duty-list" });
   container.appendChild(listWrap);
 
   function applyFilterAndRender() {
@@ -375,8 +391,108 @@ async function showList(container, setHeaderTitle) {
     return available.length ? available.join(", ") : "None marked available";
   }
 
-  function renderDiaryPage() {
+  function compactEntryTitle(entry) {
+    if (entry.movementType === "shed_shunting") {
+      return `Shed Shunting${entry.locomotiveNumberSnapshot ? ` · Loco ${entry.locomotiveNumberSnapshot}` : ""}`;
+    }
+    return `${entry.trainNumber || "Train —"}${entry.trainName ? ` · ${entry.trainName}` : ""}`;
+  }
+
+  function compactMovementLabel(entry) {
+    if (entry.movementType === "shed_shunting") return "Shed Shunting";
+    return entry.movementType === "arrival" ? "Arrival Movement" : "Departure Movement";
+  }
+
+  function renderCompactList() {
+    setHeaderTitle("Duty Log");
     listWrap.innerHTML = "";
+    const recentEntries = allEntries.slice(0, 4);
+    listWrap.appendChild(el("div", { class: "recent-duty-heading" }, [
+      el("span", {}, "Recent Movements"),
+      el("span", {}, `${recentEntries.length} shown`),
+    ]));
+    if (!recentEntries.length) {
+      listWrap.appendChild(el("div", { class: "empty-state" }, "No duty entries yet. Tap + to add one."));
+      return;
+    }
+    for (const entry of recentEntries) {
+      const badges = [];
+      if (entry.isDraft === true) badges.push(el("span", { class: "badge warn" }, "Draft"));
+      badges.push(el("span", { class: "badge" }, compactMovementLabel(entry)));
+      listWrap.appendChild(el("button", {
+        class: "card recent-duty-card",
+        type: "button",
+        onclick: () => openEntryDetail(entry),
+      }, [
+        el("div", { class: "recent-duty-main" }, [
+          el("div", { class: "recent-duty-date" }, formatDate(entry.date) || "—"),
+          el("div", { class: "recent-duty-title" }, compactEntryTitle(entry)),
+          el("div", { class: "list-row-badges" }, badges),
+        ]),
+        el("span", { class: "recent-duty-open", "aria-hidden": "true" }, "›"),
+      ]));
+    }
+  }
+
+  function openEntryDetail(entry) {
+    if (entry.movementType === "shed_shunting") {
+      renderShedShuntingDetail(entry);
+      return;
+    }
+    filteredEntries = [entry];
+    currentPageIndex = 0;
+    renderDiaryPage(true);
+  }
+
+  function detailBackButton() {
+    return el("button", {
+      class: "secondary-btn duty-detail-back",
+      type: "button",
+      onclick: renderCompactList,
+    }, "← Recent Movements");
+  }
+
+  function renderShedShuntingDetail(entry) {
+    setHeaderTitle("Shed Shunting");
+    listWrap.innerHTML = "";
+    listWrap.appendChild(detailBackButton());
+    const page = el("article", { class: "diary-entry-page shed-shunting-detail" }, [
+      el("header", { class: "diary-page-header" }, [
+        el("div", {}, [
+          el("div", { class: "diary-kicker" }, "Shed Shunting"),
+          el("h2", {}, `Loco ${entry.locomotiveNumberSnapshot || "—"}`),
+          el("div", { class: "diary-date" }, `${formatDate(entry.date)} · Shed ${entry.locomotiveShed || "—"}`),
+        ]),
+        entry.isDraft === true ? el("span", { class: "badge warn" }, "Draft") : null,
+      ]),
+      diarySection("Shunting Details", [
+        ["Date", formatDate(entry.date)],
+        ["Loco No.", entry.locomotiveNumberSnapshot],
+        ["Shed", entry.locomotiveShed],
+        ["TOC Time", entry.shuntingTocTime ? formatTime(entry.shuntingTocTime) : "—"],
+        ["TOC Place", entry.shuntingTocPlace],
+        ["Movement Upto", entry.shuntingMovementUpto],
+        ["Stable Time", entry.shuntingStableTime ? formatTime(entry.shuntingStableTime) : "—"],
+        ["Stable Place", entry.shuntingStablePlace],
+        ["CC Name", entry.shuntingCCName],
+      ]),
+    ]);
+    page.appendChild(el("div", { class: "diary-page-actions" }, [
+      el("button", { class: "primary-btn diary-edit-btn", type: "button", onclick: () => showForm(container, setHeaderTitle, entry.id) }, "✎ Edit Shunting"),
+      actionButton("Share", "share", () => openExportCard(entry, locomotives)),
+      actionButton("Delete", "delete", async () => {
+        if (!confirm("Delete this Shed Shunting record?")) return;
+        await DB.delete("dutyEntries", entry.id);
+        allEntries = allEntries.filter((candidate) => candidate.id !== entry.id);
+        renderCompactList();
+      }, "danger"),
+    ]));
+    listWrap.appendChild(page);
+  }
+
+  function renderDiaryPage(showBackButton = false) {
+    listWrap.innerHTML = "";
+    if (showBackButton) listWrap.appendChild(detailBackButton());
     if (filteredEntries.length === 0) {
       listWrap.appendChild(el("div", { class: "empty-state" }, "No duty entries yet. Tap + to add one."));
       return;
@@ -487,7 +603,8 @@ async function showList(container, setHeaderTitle) {
         allEntries = allEntries.filter((candidate) => candidate.id !== entry.id);
         filteredEntries = filteredEntries.filter((candidate) => candidate.id !== entry.id);
         currentPageIndex = Math.max(0, currentPageIndex - 1);
-        renderDiaryPage();
+        if (showBackButton) renderCompactList();
+        else renderDiaryPage();
       }, "danger"),
     ]);
     page.appendChild(actionRow);
@@ -505,17 +622,16 @@ async function showList(container, setHeaderTitle) {
       onclick: () => { currentPageIndex += 1; renderDiaryPage(); container.scrollIntoView({ behavior: "smooth", block: "start" }); },
     }, "Next →");
     nextButton.disabled = currentPageIndex >= filteredEntries.length - 1;
-    listWrap.appendChild(el("nav", { class: "diary-navigation", "aria-label": "Movement diary pages" }, [
-      previousButton,
-      el("span", { class: "diary-page-count" }, `${currentPageIndex + 1} of ${filteredEntries.length}`),
-      nextButton,
-    ]));
+    if (filteredEntries.length > 1) {
+      listWrap.appendChild(el("nav", { class: "diary-navigation", "aria-label": "Movement diary pages" }, [
+        previousButton,
+        el("span", { class: "diary-page-count" }, `${currentPageIndex + 1} of ${filteredEntries.length}`),
+        nextButton,
+      ]));
+    }
   }
 
-  fromInput.onchange = applyFilterAndRender;
-  toInput.onchange = applyFilterAndRender;
-  searchInput.oninput = applyFilterAndRender;
-  renderDiaryPage();
+  renderCompactList();
 
   const fab = el("button", {
     class: "fab",
@@ -525,6 +641,187 @@ async function showList(container, setHeaderTitle) {
   container.appendChild(fab);
 }
 
+async function showShedShuntingForm(container, setHeaderTitle, entry) {
+  setHeaderTitle("Shed Shunting");
+  container.innerHTML = "";
+  const editingSubmittedRecord = entry.isDraft !== true;
+  if (!entry.date) entry.date = todayDateInputValue();
+  if (entry.shuntingTocTime === undefined) entry.shuntingTocTime = null;
+  if (entry.shuntingTocPlace === undefined) entry.shuntingTocPlace = "";
+  if (entry.shuntingMovementUpto === undefined) entry.shuntingMovementUpto = "";
+  if (entry.shuntingStableTime === undefined) entry.shuntingStableTime = null;
+  if (entry.shuntingStablePlace === undefined) entry.shuntingStablePlace = "";
+  if (entry.shuntingCCName === undefined) entry.shuntingCCName = "";
+
+  const allEntries = await DB.getAll("dutyEntries");
+  const autosave = new AutosaveController(async () => {
+    entry.lastModified = new Date().toISOString();
+    await DB.put("dutyEntries", entry);
+  });
+  currentUnwireLifecycle = wireLifecycleFlush(autosave);
+
+  function onFieldChange() {
+    if (!editingSubmittedRecord) entry.isDraft = true;
+    autosave.fieldChanged();
+  }
+
+  function recentValues(fieldKey) {
+    const seen = new Set();
+    return allEntries
+      .filter((candidate) => candidate.id !== entry.id && candidate.movementType === "shed_shunting")
+      .sort((a, b) => (b.lastModified || "").localeCompare(a.lastModified || ""))
+      .map((candidate) => String(candidate[fieldKey] || "").trim())
+      .filter((value) => {
+        const normalized = value.toLowerCase();
+        if (!value || seen.has(normalized)) return false;
+        seen.add(normalized);
+        return true;
+      })
+      .slice(0, 20);
+  }
+
+  function suggestionInput(label, fieldKey, placeholder) {
+    const listId = `shunting-${fieldKey}-${entry.id}`;
+    const datalist = el("datalist", { id: listId });
+    for (const value of recentValues(fieldKey)) datalist.appendChild(el("option", { value }));
+    container.appendChild(datalist);
+    return el("div", { class: "shunting-field" }, [
+      fieldLabel(label),
+      el("input", {
+        type: "text",
+        list: listId,
+        value: entry[fieldKey] || "",
+        placeholder,
+        oninput: (event) => {
+          entry[fieldKey] = event.target.value;
+          onFieldChange();
+        },
+      }),
+    ]);
+  }
+
+  async function goBack() {
+    await autosave.flush();
+    if (isEntryEmpty(entry)) await DB.delete("dutyEntries", entry.id);
+    resumePromptDismissedForSession = true;
+    await showList(container, setHeaderTitle);
+  }
+
+  container.appendChild(el("div", { class: "sheet-header" }, [
+    el("button", { class: "icon-btn shunting-back-btn", type: "button", onclick: goBack }, "← Back"),
+    actionButton("Delete", "delete", async () => {
+      if (!confirm("Delete this Shed Shunting record?")) return;
+      await DB.delete("dutyEntries", entry.id);
+      await showList(container, setHeaderTitle);
+    }, "danger"),
+  ]));
+
+  const section = el("div", { class: "form-section shunting-form-section" });
+  section.appendChild(el("div", { class: "form-section-title" }, "Shed Shunting Details"));
+
+  const dateInput = el("input", {
+    type: "date",
+    value: entry.date,
+    onchange: (event) => {
+      entry.date = event.target.value || todayDateInputValue();
+      renderTimeFields();
+      onFieldChange();
+    },
+  });
+  section.appendChild(el("div", { class: "form-row" }, [fieldLabel("Date"), dateInput]));
+
+  const locoInput = el("input", {
+    type: "text",
+    inputmode: "numeric",
+    pattern: "[0-9]*",
+    value: normalizeLocomotiveNumber(entry.locomotiveNumberSnapshot),
+    placeholder: "Loco number",
+    oninput: (event) => {
+      const value = normalizeLocomotiveNumber(event.target.value);
+      event.target.value = value;
+      entry.locomotiveNumberSnapshot = value;
+      onFieldChange();
+    },
+  });
+  const shedInput = el("input", {
+    type: "text",
+    value: sanitizeShedCode(entry.locomotiveShed),
+    placeholder: "Shed code",
+    maxlength: "4",
+    autocapitalize: "characters",
+    oninput: (event) => {
+      const value = sanitizeShedCode(event.target.value);
+      event.target.value = value;
+      entry.locomotiveShed = value;
+      onFieldChange();
+    },
+  });
+  section.appendChild(el("div", { class: "shunting-two-column" }, [
+    el("div", { class: "shunting-field" }, [fieldLabel("Loco No."), locoInput]),
+    el("div", { class: "shunting-field" }, [fieldLabel("Shed"), shedInput]),
+  ]));
+
+  const tocTimeHolder = el("div", { class: "shunting-time-holder" });
+  const stableTimeHolder = el("div", { class: "shunting-time-holder" });
+  function renderTimeFields() {
+    tocTimeHolder.innerHTML = "";
+    stableTimeHolder.innerHTML = "";
+    tocTimeHolder.appendChild(createTimeField(entry.date, entry.shuntingTocTime, (value) => {
+      entry.shuntingTocTime = value;
+      onFieldChange();
+    }));
+    stableTimeHolder.appendChild(createTimeField(entry.date, entry.shuntingStableTime, (value) => {
+      entry.shuntingStableTime = value;
+      onFieldChange();
+    }));
+  }
+
+  section.appendChild(el("div", { class: "shunting-two-column" }, [
+    el("div", { class: "shunting-field" }, [fieldLabel("TOC Time"), tocTimeHolder]),
+    suggestionInput("TOC Place", "shuntingTocPlace", "Enter or select recent"),
+  ]));
+  section.appendChild(el("div", { class: "form-row" }, [
+    suggestionInput("Movement Upto", "shuntingMovementUpto", "Enter or select recent"),
+  ]));
+  section.appendChild(el("div", { class: "shunting-two-column" }, [
+    el("div", { class: "shunting-field" }, [fieldLabel("Stable Time"), stableTimeHolder]),
+    suggestionInput("Stable Place", "shuntingStablePlace", "Enter or select recent"),
+  ]));
+  section.appendChild(el("div", { class: "form-row" }, [
+    el("div", { class: "shunting-field" }, [
+      fieldLabel("CC Name"),
+      el("input", {
+        type: "text",
+        value: entry.shuntingCCName || "",
+        placeholder: "Enter CC name",
+        oninput: (event) => {
+          entry.shuntingCCName = event.target.value;
+          onFieldChange();
+        },
+      }),
+    ]),
+  ]));
+  renderTimeFields();
+  container.appendChild(section);
+  container.appendChild(el("button", {
+    class: "primary-btn shunting-save-btn",
+    type: "button",
+    onclick: async () => {
+      if (!entry.date || !entry.locomotiveNumberSnapshot) {
+        showToast("Date and Loco No. are required.");
+        return;
+      }
+      entry.isDraft = false;
+      entry.lastModified = new Date().toISOString();
+      await autosave.flush();
+      await DB.put("dutyEntries", entry);
+      resumePromptDismissedForSession = true;
+      showToast("Shed Shunting record saved.");
+      await showList(container, setHeaderTitle);
+    },
+  }, "Save Shed Shunting"));
+}
+
 async function showForm(container, setHeaderTitle, entryId) {
   setHeaderTitle("Daily Loco Movement Record");
   container.innerHTML = "";
@@ -532,6 +829,10 @@ async function showForm(container, setHeaderTitle, entryId) {
   let entry = await DB.get("dutyEntries", entryId);
   if (!entry) {
     showList(container, setHeaderTitle);
+    return;
+  }
+  if (entry.movementType === "shed_shunting") {
+    await showShedShuntingForm(container, setHeaderTitle, entry);
     return;
   }
   const editingSubmittedRecord = entry.isDraft !== true;

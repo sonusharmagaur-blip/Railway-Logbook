@@ -39,6 +39,22 @@ function buildFields(entry, locomotives, profile) {
   const locoType = entry.locomotiveType || (loco && loco.locoClass) || "—";
   const locoShed = entry.locomotiveShed || (loco && loco.shed) || "—";
 
+  if (entry.movementType === "shed_shunting") {
+    return [
+      { label: "Movement", value: "Shed Shunting" },
+      { label: "Date", value: formatDate(entry.date) || "—" },
+      { label: "Locomotive", value: locoNumber },
+      { label: "Shed", value: locoShed },
+      { label: "TOC Time", value: entry.shuntingTocTime ? formatTime(entry.shuntingTocTime) : "—" },
+      { label: "TOC Place", value: entry.shuntingTocPlace || "—" },
+      { label: "Movement Upto", value: entry.shuntingMovementUpto || "—" },
+      { label: "Stable Time", value: entry.shuntingStableTime ? formatTime(entry.shuntingStableTime) : "—" },
+      { label: "Stable Place", value: entry.shuntingStablePlace || "—" },
+      { label: "CC Name", value: entry.shuntingCCName || "—" },
+      { label: "LPS Name", value: (profile && profile.name) || "—" },
+    ];
+  }
+
   let uicValue = entry.uicStatus || "—";
   if (entry.uicStatus === UICStatus.MODIFIED && entry.uicCableOption) {
     uicValue += ` (${entry.uicCableOption})`;
@@ -78,7 +94,7 @@ function buildFields(entry, locomotives, profile) {
     { label: "Officials", value: officialsSummary },
     { label: "Repair List", value: entry.repairList || "—" },
     { label: "Remarks", value: entry.remarks || "—" },
-    { label: "Pilot", value: (profile && profile.name) || "—" },
+    { label: "LPS Name", value: (profile && profile.name) || "—" },
   ];
 }
 
