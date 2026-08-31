@@ -4,7 +4,7 @@ import { UICStatus } from "./models.js";
 import { el, formatDate, formatTime } from "./util.js";
 
 const SCALE = 3; // render at 3x for a crisp shareable image
-const CARD_WIDTH = 360;
+const CARD_WIDTH = 390;
 const WATERMARK_URL = new URL("../wap7-share-watermark.png", import.meta.url).href;
 
 const COLORS = {
@@ -91,23 +91,47 @@ function loadImage(src) {
 }
 
 function drawCard(canvas, fields, watermarkImage) {
-  const rowPadding = 12;
-  const labelSize = 12;
-  const valueSize = 16;
-  const headerHeight = 64;
+  const cellPadding = 9;
+  const labelSize = 9;
+  const valueSize = 13;
+  const valueLineHeight = 16;
+  const headerHeight = 76;
+  const bodyInset = 12;
+  const cellGap = 7;
   const ctx = canvas.getContext("2d");
 
-  // First pass (unscaled) to measure row heights with wrapping.
+  // Compact two-column cards keep the exported image close to a phone-screen portrait.
+  const fullWidthLabels = new Set(["Train", "Private Number Details", "Officials", "Remarks"]);
+  const rows = [];
+  let pendingField = null;
+  for (const field of fields) {
+    if (fullWidthLabels.has(field.label)) {
+      if (pendingField) rows.push([pendingField]);
+      pendingField = null;
+      rows.push([field]);
+    } else if (pendingField) {
+      rows.push([pendingField, field]);
+      pendingField = null;
+    } else {
+      pendingField = field;
+    }
+  }
+  if (pendingField) rows.push([pendingField]);
+
   const measureCanvas = document.createElement("canvas");
   const mctx = measureCanvas.getContext("2d");
   mctx.font = `600 ${valueSize}px -apple-system, sans-serif`;
-  const innerWidth = CARD_WIDTH - 32;
-  const rowHeights = fields.map((f) => {
-    const lines = wrapText(mctx, f.value, innerWidth);
-    return rowPadding * 2 + labelSize + 6 + lines.length * (valueSize + 4);
+  const innerWidth = CARD_WIDTH - bodyInset * 2;
+  const columnWidth = (innerWidth - cellGap) / 2;
+  const rowHeights = rows.map((row) => {
+    const cellWidth = row.length === 1 ? innerWidth : columnWidth;
+    return Math.max(...row.map((field) => {
+      const lines = wrapText(mctx, field.value, cellWidth - cellPadding * 2);
+      return cellPadding * 2 + labelSize + 5 + lines.length * valueLineHeight;
+    }));
   });
-  const bodyHeight = rowHeights.reduce((a, b) => a + b, 0);
-  const totalHeight = headerHeight + bodyHeight + 24;
+  const bodyHeight = rowHeights.reduce((a, b) => a + b, 0) + Math.max(0, rows.length - 1) * cellGap;
+  const totalHeight = Math.max(780, headerHeight + bodyHeight + bodyInset * 2);
 
   canvas.width = CARD_WIDTH * SCALE;
   canvas.height = totalHeight * SCALE;
@@ -117,61 +141,68 @@ function drawCard(canvas, fields, watermarkImage) {
 
   // Card background
   ctx.fillStyle = COLORS.cardBg;
-  roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 12);
+  roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
   ctx.fill();
 
   if (watermarkImage) {
-    const imageWidth = CARD_WIDTH - 16;
+    const imageWidth = CARD_WIDTH - 20;
     const imageHeight = imageWidth * (watermarkImage.naturalHeight / watermarkImage.naturalWidth);
-    const imageY = headerHeight + Math.max(30, (bodyHeight - imageHeight) / 2);
+    const imageY = headerHeight + Math.max(30, (totalHeight - headerHeight - imageHeight) / 2);
     ctx.save();
-    roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 12);
+    roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
     ctx.clip();
-    ctx.globalAlpha = 0.2;
-    ctx.drawImage(watermarkImage, 8, imageY, imageWidth, imageHeight);
+    ctx.globalAlpha = 0.15;
+    ctx.drawImage(watermarkImage, 10, imageY, imageWidth, imageHeight);
     ctx.restore();
   }
 
   // Header
   ctx.save();
-  roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 12);
+  roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
   ctx.clip();
   ctx.fillStyle = COLORS.headerBg;
   ctx.fillRect(0, 0, CARD_WIDTH, headerHeight);
   ctx.restore();
 
   ctx.fillStyle = COLORS.headerText;
-  ctx.font = "700 20px -apple-system, sans-serif";
+  ctx.font = "700 19px -apple-system, sans-serif";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("Duty Card", 16, 38);
-  ctx.font = "400 13px -apple-system, sans-serif";
-  ctx.fillText("RailwayLogbook", 16, 56);
+  ctx.fillText("Daily Loco Movement Record", 17, 37);
+  ctx.font = "500 11px -apple-system, sans-serif";
+  ctx.fillText("RAILWAY LOGBOOK • MOBILE DUTY CARD", 17, 57);
 
-  // Rows
-  let y = headerHeight + 10;
-  ctx.font = `600 ${valueSize}px -apple-system, sans-serif`;
-  fields.forEach((f, i) => {
-    const rowH = rowHeights[i];
-    ctx.strokeStyle = COLORS.divider;
-    if (i > 0) {
-      ctx.beginPath();
-      ctx.moveTo(16, y);
-      ctx.lineTo(CARD_WIDTH - 16, y);
+  let y = headerHeight + bodyInset;
+  rows.forEach((row, rowIndex) => {
+    const rowHeight = rowHeights[rowIndex];
+    const cellWidth = row.length === 1 ? innerWidth : columnWidth;
+    row.forEach((field, columnIndex) => {
+      const x = bodyInset + columnIndex * (columnWidth + cellGap);
+      ctx.fillStyle = "rgba(255, 253, 249, 0.91)";
+      roundRect(ctx, x, y, cellWidth, rowHeight, 9);
+      ctx.fill();
+      ctx.strokeStyle = COLORS.divider;
+      ctx.lineWidth = 1;
       ctx.stroke();
-    }
-    let textY = y + rowPadding + labelSize;
-    ctx.fillStyle = COLORS.label;
-    ctx.font = `500 ${labelSize}px -apple-system, sans-serif`;
-    ctx.fillText(f.label.toUpperCase(), 16, textY);
 
-    ctx.fillStyle = COLORS.value;
-    ctx.font = `600 ${valueSize}px -apple-system, sans-serif`;
-    const lines = wrapText(ctx, f.value, innerWidth);
-    lines.forEach((line, li) => {
-      ctx.fillText(line, 16, textY + 6 + (li + 1) * (valueSize + 4));
+      const labelY = y + cellPadding + labelSize;
+      ctx.fillStyle = COLORS.label;
+      ctx.font = `600 ${labelSize}px -apple-system, sans-serif`;
+      ctx.fillText(field.label.toUpperCase(), x + cellPadding, labelY);
+
+      ctx.fillStyle = COLORS.value;
+      ctx.font = `650 ${valueSize}px -apple-system, sans-serif`;
+      const lines = wrapText(ctx, field.value, cellWidth - cellPadding * 2);
+      lines.forEach((line, lineIndex) => {
+        ctx.fillText(line, x + cellPadding, labelY + 5 + (lineIndex + 1) * valueLineHeight);
+      });
     });
-    y += rowH;
+    y += rowHeight + cellGap;
   });
+
+  ctx.strokeStyle = COLORS.headerBg;
+  ctx.lineWidth = 2;
+  roundRect(ctx, 1, 1, CARD_WIDTH - 2, totalHeight - 2, 21);
+  ctx.stroke();
 }
 
 function roundRect(ctx, x, y, w, h, r) {
