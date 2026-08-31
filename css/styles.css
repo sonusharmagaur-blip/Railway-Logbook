@@ -68,6 +68,122 @@ html, body {
 .tab-btn.active { color: var(--maroon); font-weight: 600; }
 .tab-icon { font-size: 20px; }
 
+/* Duty adjustment records */
+.adjustment-page { padding-bottom: 76px; }
+.adjustment-filters { overflow: visible; }
+.adjustment-filter-grid,
+.adjustment-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 14px 14px;
+}
+.adjustment-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.adjustment-field { min-width: 0; }
+.adjustment-field label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.adjustment-field input,
+.adjustment-field select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.adjustment-type-field input { margin-top: 7px; }
+.adjustment-result-summary {
+  margin: 2px 2px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.adjustment-record-card { padding: 13px; }
+.adjustment-record-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.adjustment-record-name { font-size: 16px; font-weight: 750; }
+.adjustment-record-date { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
+.adjustment-type-badge { flex: 0 0 auto; background: #f4e7d5; color: var(--maroon); font-weight: 700; }
+.adjustment-position-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  margin-top: 11px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fffdf9;
+  font-size: 12px;
+}
+.adjustment-position-line strong { overflow-wrap: anywhere; }
+.adjustment-position-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; }
+.adjustment-position-arrow { color: var(--maroon); font-size: 16px; font-weight: 800; }
+.adjustment-record-remark { margin-top: 9px; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.adjustment-empty { padding-top: 26px; }
+.adjustment-sheet-header { align-items: center; }
+.adjustment-back-btn { padding-left: 0; font-size: 15px; font-weight: 700; }
+.adjustment-form-hint { color: var(--text-muted); font-size: 11px; }
+.adjustment-row-card { overflow: visible; }
+.adjustment-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px 5px;
+}
+.adjustment-row-title { color: var(--maroon); font-size: 13px; font-weight: 750; }
+.adjustment-add-row-btn,
+.adjustment-save-btn { width: 100%; margin-bottom: 10px; }
+.adjustment-save-btn { margin-bottom: 20px; }
+.staff-add-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.staff-add-btn { width: auto; white-space: nowrap; padding-left: 13px; padding-right: 13px; }
+.staff-settings-list { margin-top: 10px; border-top: 1px solid var(--border); }
+.staff-settings-empty { padding: 12px 0 4px; color: var(--text-muted); font-size: 12px; }
+.staff-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.staff-remove-btn {
+  border: 0;
+  background: transparent;
+  color: var(--danger);
+  padding: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 540px) {
+  .adjustment-filter-grid { grid-template-columns: 1fr 1fr; }
+  .adjustment-filter-grid .adjustment-field:first-child { grid-column: 1 / -1; }
+}
+
+@media (max-width: 400px) {
+  .tab-btn { font-size: 10px; }
+  .adjustment-entry-grid { grid-template-columns: 1fr; }
+  .adjustment-position-line { grid-template-columns: auto minmax(0, 1fr); }
+  .adjustment-position-arrow { display: none; }
+  .staff-add-row { grid-template-columns: 1fr; }
+  .staff-add-btn { width: 100%; }
+}
+
 /* Cards / lists */
 .card {
   background: var(--card-bg);
