@@ -4,16 +4,21 @@ import { UICStatus } from "./models.js";
 import { el, formatDate, formatTime } from "./util.js";
 
 const SCALE = 3; // render at 3x for a crisp shareable image
-const CARD_WIDTH = 390;
-const WATERMARK_URL = new URL("../wap7-watermark-transparent-v3.png", import.meta.url).href;
+// iPhone 15 Plus portrait output: 430 × 932 logical pixels rendered at 3x.
+// The resulting PNG is exactly 1290 × 2796 pixels (approximately 19.5:9).
+const CARD_WIDTH = 430;
+const CARD_HEIGHT = 932;
+const BACKGROUND_URL = new URL("../wap7-share-background.png", import.meta.url).href;
+const FONT_STACK = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Avenir Next", "Segoe UI", sans-serif';
 
 const COLORS = {
-  headerBg: "#7b1e14",
-  headerText: "#faf0e1",
-  cardBg: "#ffffff",
-  label: "#7a6f63",
-  value: "#241a15",
-  divider: "#e0d8ca",
+  fallbackBg: "#07131f",
+  headerText: "#fff9ed",
+  accent: "#f4a33b",
+  label: "#ffd497",
+  value: "#ffffff",
+  panel: "rgba(5, 18, 29, 0.76)",
+  panelBorder: "rgba(255, 215, 158, 0.52)",
 };
 
 function wrapText(ctx, text, maxWidth) {
@@ -85,14 +90,14 @@ function loadImage(src) {
   });
 }
 
-function drawCard(canvas, fields, watermarkImage, lpsName) {
-  const cellPadding = 9;
-  const labelSize = 9;
-  const valueSize = 13;
-  const valueLineHeight = 16;
-  const headerHeight = 76;
+function drawCard(canvas, fields, backgroundImage, lpsName) {
+  const cellPadding = 11;
+  const labelSize = 9.5;
+  const valueSize = 14;
+  const valueLineHeight = 18;
+  const headerHeight = 104;
   const bodyInset = 12;
-  const cellGap = 7;
+  const cellGap = 8;
   const ctx = canvas.getContext("2d");
 
   // Compact two-column cards keep the exported image close to a phone-screen portrait.
@@ -115,18 +120,18 @@ function drawCard(canvas, fields, watermarkImage, lpsName) {
 
   const measureCanvas = document.createElement("canvas");
   const mctx = measureCanvas.getContext("2d");
-  mctx.font = `600 ${valueSize}px -apple-system, sans-serif`;
+  mctx.font = `650 ${valueSize}px ${FONT_STACK}`;
   const innerWidth = CARD_WIDTH - bodyInset * 2;
   const columnWidth = (innerWidth - cellGap) / 2;
   const rowHeights = rows.map((row) => {
     const cellWidth = row.length === 1 ? innerWidth : columnWidth;
     return Math.max(...row.map((field) => {
       const lines = wrapText(mctx, field.value, cellWidth - cellPadding * 2);
-      return cellPadding * 2 + labelSize + 5 + lines.length * valueLineHeight;
+      return cellPadding * 2 + labelSize + 6 + lines.length * valueLineHeight;
     }));
   });
   const bodyHeight = rowHeights.reduce((a, b) => a + b, 0) + Math.max(0, rows.length - 1) * cellGap;
-  const totalHeight = Math.max(780, headerHeight + bodyHeight + bodyInset * 2);
+  const totalHeight = CARD_HEIGHT;
 
   canvas.width = CARD_WIDTH * SCALE;
   canvas.height = totalHeight * SCALE;
@@ -134,58 +139,71 @@ function drawCard(canvas, fields, watermarkImage, lpsName) {
   canvas.style.height = totalHeight + "px";
   ctx.scale(SCALE, SCALE);
 
-  // Card background
-  ctx.fillStyle = COLORS.cardBg;
+  // Full-bleed user-provided WAP-7 portrait. Its aspect ratio already closely
+  // matches the iPhone 15 Plus canvas, so the complete image is retained.
+  ctx.fillStyle = COLORS.fallbackBg;
   roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
   ctx.fill();
 
-  if (watermarkImage) {
-    const imageWidth = CARD_WIDTH - 20;
-    const imageHeight = imageWidth * (watermarkImage.naturalHeight / watermarkImage.naturalWidth);
-    const imageY = headerHeight + Math.max(30, (totalHeight - headerHeight - imageHeight) / 2);
+  if (backgroundImage) {
     ctx.save();
     roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
     ctx.clip();
-    ctx.globalAlpha = 0.13;
-    ctx.drawImage(watermarkImage, 10, imageY, imageWidth, imageHeight);
+    ctx.drawImage(backgroundImage, 0, 0, CARD_WIDTH, totalHeight);
     ctx.restore();
   }
 
-  // Header
+  // A cinematic shade preserves the photograph while keeping all text readable.
   ctx.save();
   roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
   ctx.clip();
-  ctx.fillStyle = COLORS.headerBg;
-  ctx.fillRect(0, 0, CARD_WIDTH, headerHeight);
+  const shade = ctx.createLinearGradient(0, 0, 0, totalHeight);
+  shade.addColorStop(0, "rgba(2, 10, 18, 0.82)");
+  shade.addColorStop(0.16, "rgba(2, 10, 18, 0.22)");
+  shade.addColorStop(0.56, "rgba(2, 10, 18, 0.14)");
+  shade.addColorStop(1, "rgba(2, 10, 18, 0.72)");
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, CARD_WIDTH, totalHeight);
   ctx.restore();
 
+  // Premium compact header leaves the sunset and locomotive visible.
   ctx.fillStyle = COLORS.headerText;
-  ctx.font = "700 19px -apple-system, sans-serif";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+  ctx.shadowBlur = 8;
+  ctx.font = `800 23px ${FONT_STACK}`;
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("Daily Loco Movement Record", 17, 37);
-  ctx.font = "600 12px -apple-system, sans-serif";
-  ctx.fillText(`LPS Name ${lpsName}`, 17, 58);
+  ctx.fillText("Daily Loco Movement Record", 18, 42);
+  ctx.font = `650 12.5px ${FONT_STACK}`;
+  ctx.fillStyle = "#ffe3ba";
+  ctx.fillText(`LPS Name · ${lpsName}`, 18, 67);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = COLORS.accent;
+  ctx.fillRect(18, 82, 74, 3);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.font = `650 9px ${FONT_STACK}`;
+  ctx.fillText("RAILWAY LOGBOOK · MOBILE DUTY CARD", 103, 86);
 
-  let y = headerHeight + bodyInset;
+  // Anchor details near the lower half so the full portrait remains the hero.
+  let y = Math.max(headerHeight + bodyInset, totalHeight - bodyHeight - 72);
   rows.forEach((row, rowIndex) => {
     const rowHeight = rowHeights[rowIndex];
     const cellWidth = row.length === 1 ? innerWidth : columnWidth;
     row.forEach((field, columnIndex) => {
       const x = bodyInset + columnIndex * (columnWidth + cellGap);
-      ctx.fillStyle = "rgba(255, 253, 249, 0.91)";
-      roundRect(ctx, x, y, cellWidth, rowHeight, 9);
+      ctx.fillStyle = COLORS.panel;
+      roundRect(ctx, x, y, cellWidth, rowHeight, 12);
       ctx.fill();
-      ctx.strokeStyle = COLORS.divider;
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = COLORS.panelBorder;
+      ctx.lineWidth = 0.9;
       ctx.stroke();
 
       const labelY = y + cellPadding + labelSize;
       ctx.fillStyle = COLORS.label;
-      ctx.font = `600 ${labelSize}px -apple-system, sans-serif`;
+      ctx.font = `750 ${labelSize}px ${FONT_STACK}`;
       ctx.fillText(field.label.toUpperCase(), x + cellPadding, labelY);
 
       ctx.fillStyle = COLORS.value;
-      ctx.font = `650 ${valueSize}px -apple-system, sans-serif`;
+      ctx.font = `700 ${valueSize}px ${FONT_STACK}`;
       const lines = wrapText(ctx, field.value, cellWidth - cellPadding * 2);
       lines.forEach((line, lineIndex) => {
         ctx.fillText(line, x + cellPadding, labelY + 5 + (lineIndex + 1) * valueLineHeight);
@@ -194,8 +212,8 @@ function drawCard(canvas, fields, watermarkImage, lpsName) {
     y += rowHeight + cellGap;
   });
 
-  ctx.strokeStyle = COLORS.headerBg;
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255, 207, 137, 0.88)";
+  ctx.lineWidth = 1.5;
   roundRect(ctx, 1, 1, CARD_WIDTH - 2, totalHeight - 2, 21);
   ctx.stroke();
 }
@@ -213,14 +231,14 @@ function roundRect(ctx, x, y, w, h, r) {
 export async function openExportCard(entry, locomotives, options = {}) {
   const profile = await DB.get("profile", "singleton");
   const fields = buildFields(entry, locomotives, profile);
-  const watermarkImage = await loadImage(WATERMARK_URL);
+  const backgroundImage = await loadImage(BACKGROUND_URL);
   const lpsName = (profile && profile.name) || "Tripurari Sharma";
 
   const overlay = el("div", { class: "overlay" });
   const canvasWrap = el("div", { class: "duty-card-canvas-wrap" });
   const canvas = el("canvas");
   canvasWrap.appendChild(canvas);
-  drawCard(canvas, fields, watermarkImage, lpsName);
+  drawCard(canvas, fields, backgroundImage, lpsName);
 
   const shareBtn = el("button", { class: "primary-btn", onclick: async () => {
     canvas.toBlob(async (blob) => {
@@ -260,7 +278,7 @@ export async function openExportCard(entry, locomotives, options = {}) {
 
   const card = el("div", { class: "overlay-card share-card-dialog" }, [
     el("h2", {}, "Share Duty Card"),
-    el("p", {}, "Save or share the movement card, then tap Done at the end."),
+    el("p", {}, "1290 × 2796 px portrait image · Save or share, then tap Done."),
     canvasWrap,
     shareBtn,
     doneBtn,

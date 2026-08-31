@@ -127,13 +127,14 @@ export async function mountSettingsTab(container, setHeaderTitle) {
 
   // --- Backup section ---
   const backupSection = el("div", { class: "form-section" });
-  backupSection.appendChild(el("div", { class: "form-section-title" }, "Google Drive Backup"));
+  backupSection.appendChild(el("div", { class: "form-section-title" }, "Google Drive & Sheets Connection"));
 
   const clientIdRow = await DB.get("meta", "googleClientId");
   const clientIdInput = el("input", { type: "text", placeholder: "Google OAuth Web Client ID", value: (clientIdRow && clientIdRow.value) || "" });
   backupSection.appendChild(el("div", { class: "form-row" }, [
-    el("label", {}, "OAuth Client ID (see README for setup)"),
+    el("label", {}, "Google OAuth Web Client ID"),
     clientIdInput,
+    el("span", { class: "list-row-sub" }, "One free Google connection powers both lifetime Drive backups and Duty Adjustment Sheet sync."),
     el("span", { class: "list-row-sub" }, "Drive retention: one dated backup per day, never auto-deleted by RailwayLogbook."),
     el("span", { class: "list-row-sub" }, "Google access tokens expire by design. If needed, Backup Now asks you to reconnect; local saving never stops."),
   ]));
@@ -169,7 +170,7 @@ export async function mountSettingsTab(container, setHeaderTitle) {
     } catch (e) {
       showToast(e.message || "Sign-in failed");
     }
-  } }, "Connect & Back Up");
+  } }, "Connect Google Account & Back Up");
 
   const backupNowBtn = el("button", { class: "primary-btn", style: "margin-top:8px;", onclick: async () => {
     backupNowBtn.textContent = "Backing up…";
