@@ -169,6 +169,39 @@ html, body {
   font-weight: 700;
   cursor: pointer;
 }
+.sheet-link-actions,
+.sheet-sync-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.sheet-sync-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 11px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.sheet-status-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #b8afa4;
+}
+.sheet-status-dot.is-linked { background: var(--ok); }
+.sheet-sync-actions .primary-btn { width: 100%; }
+.sheet-open-holder { display: flex; }
+.sheet-open-link {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  text-align: center;
+}
 
 @media (max-width: 540px) {
   .adjustment-filter-grid { grid-template-columns: 1fr 1fr; }
@@ -182,6 +215,8 @@ html, body {
   .adjustment-position-arrow { display: none; }
   .staff-add-row { grid-template-columns: 1fr; }
   .staff-add-btn { width: 100%; }
+  .sheet-link-actions,
+  .sheet-sync-actions { grid-template-columns: 1fr; }
 }
 
 /* Cards / lists */
