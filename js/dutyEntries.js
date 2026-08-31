@@ -122,6 +122,28 @@ function fieldCaption(label) {
   ]);
 }
 
+function actionIcon(kind) {
+  const paths = {
+    share: '<path d="M12 3v11m0-11 4 4m-4-4L8 7"/><path d="M5 11v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
+    delete: '<path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/>',
+  };
+  return el("span", {
+    class: "action-icon",
+    "aria-hidden": "true",
+    html: `<svg viewBox="0 0 24 24" focusable="false">${paths[kind]}</svg>`,
+  });
+}
+
+function actionButton(label, kind, onclick, tone = "") {
+  return el("button", {
+    class: `icon-action-btn${tone ? ` ${tone}` : ""}`,
+    type: "button",
+    title: label,
+    "aria-label": label,
+    onclick,
+  }, [actionIcon(kind), el("span", { class: "icon-action-label" }, label)]);
+}
+
 function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
   const history = new Map();
   const legacyById = new Map(locomotives.map((loco) => [loco.id, loco]));
@@ -345,7 +367,8 @@ async function showForm(container, setHeaderTitle, entryId) {
     showList(container, setHeaderTitle);
     return;
   }
-  if (entry.draftPage !== 2) entry.draftPage = 1;
+  const editingSubmittedRecord = entry.isDraft !== true;
+  if (![1, 2, 3].includes(entry.draftPage)) entry.draftPage = 1;
   if (!entry.locomotivePTType) entry.locomotivePTType = PT_TYPE_OPTIONS[0];
   if (!Array.isArray(entry.additionalLocomotives)) entry.additionalLocomotives = [];
   if (!SR_BUR_MAKE_OPTIONS.includes(entry.srMake)) entry.srMake = SR_BUR_MAKE_OPTIONS[0];
@@ -465,51 +488,67 @@ async function showForm(container, setHeaderTitle, entryId) {
     showList(container, setHeaderTitle);
   }
 
-  async function finalizeEntry() {
-    entry.isDraft = false;
-    entry.draftPage = 1;
+  async function openSubmissionShare() {
     await autosave.flush();
-    resumePromptDismissedForSession = true;
-    showToast("Record saved.");
-    showList(container, setHeaderTitle);
+    await openExportCard(entry, locomotives, {
+      doneLabel: editingSubmittedRecord ? "Done" : "Done & Finish Movement",
+      onDone: async () => {
+        entry.isDraft = false;
+        entry.draftPage = 1;
+        entry.lastModified = new Date().toISOString();
+        await DB.put("dutyEntries", entry);
+        resumePromptDismissedForSession = true;
+        showToast(editingSubmittedRecord ? "Record updated." : "Movement completed and saved in History.");
+        await showList(container, setHeaderTitle);
+      },
+    });
   }
 
   function onFieldChange() {
-    entry.isDraft = true;
+    if (!editingSubmittedRecord) entry.isDraft = true;
     autosave.fieldChanged();
   }
 
   const header = el("div", { class: "sheet-header" }, [
     el("button", { class: "icon-btn", onclick: goBack }, "← Back"),
-    el("div", {}, [
-      el("button", { class: "icon-btn", onclick: () => openExportCard(entry, locomotives) }, "⇪"),
-      el("button", { class: "icon-btn", onclick: async () => {
+    el("div", { class: "sheet-actions" }, [
+      actionButton("Share", "share", () => openExportCard(entry, locomotives)),
+      actionButton("Delete", "delete", async () => {
         if (confirm("Delete this duty entry?")) {
           await DB.delete("dutyEntries", entry.id);
           showList(container, setHeaderTitle);
         }
-      } }, "🗑"),
+      }, "danger"),
     ]),
   ]);
   container.appendChild(header);
 
   const stepHeading = el("div", { style: "font-weight:700;font-size:16px;" }, "Train & Loco Details");
-  const stepCount = el("div", { style: "color:var(--text-muted);font-size:13px;" }, "Step 1 of 2");
-  const progressFill = el("div", { style: "height:100%;width:50%;background:var(--maroon);border-radius:999px;transition:width .2s ease;" });
+  const stepCount = el("div", { style: "color:var(--text-muted);font-size:13px;" }, "Step 1 of 3");
+  const progressFill = el("div", { style: "height:100%;width:33.33%;background:var(--maroon);border-radius:999px;transition:width .2s ease;" });
   const progressCard = el("div", { class: "card", style: "padding:14px;margin-bottom:12px;" }, [
     el("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;" }, [stepHeading, stepCount]),
     el("div", { style: "height:5px;background:var(--border);border-radius:999px;overflow:hidden;" }, [progressFill]),
   ]);
   const trainLocoPage = el("div", {});
   const remainingDetailsPage = el("div", { style: "display:none;" });
+  const reviewSubmitPage = el("div", { style: "display:none;" });
 
-  function showDeparturePage(pageNumber, persistPage = true) {
+  function showWizardPage(pageNumber, persistPage = true) {
     const showFirstPage = pageNumber === 1;
+    const showSecondPage = pageNumber === 2;
+    const showThirdPage = pageNumber === 3;
     trainLocoPage.style.display = showFirstPage ? "block" : "none";
-    remainingDetailsPage.style.display = showFirstPage ? "none" : "block";
-    stepHeading.textContent = showFirstPage ? "Train & Loco Details" : "Movement Details";
-    stepCount.textContent = showFirstPage ? "Step 1 of 2" : "Step 2 of 2";
-    progressFill.style.width = showFirstPage ? "50%" : "100%";
+    remainingDetailsPage.style.display = showSecondPage ? "block" : "none";
+    reviewSubmitPage.style.display = showThirdPage ? "block" : "none";
+    stepHeading.textContent = showFirstPage
+      ? "Train & Loco Details"
+      : showSecondPage
+        ? (entry.movementType === "arrival" ? "Arrival Details" : "Movement Details")
+        : "Review & Submit";
+    stepCount.textContent = showFirstPage ? "Step 1 of 3" : showSecondPage ? "Step 2 of 3" : "Step 3 of 3";
+    progressFill.style.width = showFirstPage ? "33.33%" : showSecondPage ? "66.66%" : "100%";
+    if (showThirdPage) renderReviewPage();
     if (persistPage && entry.isDraft === true && entry.draftPage !== pageNumber) {
       entry.draftPage = pageNumber;
       autosave.fieldChanged();
@@ -520,6 +559,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   container.appendChild(progressCard);
   container.appendChild(trainLocoPage);
   container.appendChild(remainingDetailsPage);
+  container.appendChild(reviewSubmitPage);
 
   // --- Trip Info ---
   const tripSection = el("div", { class: "form-section" });
@@ -1119,13 +1159,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   trainLocoPage.appendChild(el("button", {
     class: "primary-btn",
     type: "button",
-    onclick: () => {
-      if (isArrivalMovement) {
-        showToast("Arrival Movement next section will be added later.");
-        return;
-      }
-      showDeparturePage(2);
-    },
+    onclick: () => showWizardPage(2),
   }, isArrivalMovement ? "Next: Arrival Details →" : "Next: Movement Details →"));
 
   // --- Timeline of Working ---
@@ -1266,7 +1300,14 @@ async function showForm(container, setHeaderTitle, entryId) {
     createMovementManualField("HQ", "madeOverChargeHQ", "HQ"),
     createMovementTimeField("Made Over Charge Time", "madeOverChargeTime"),
   ]));
-  remainingDetailsPage.appendChild(timelineSection);
+  if (isArrivalMovement) {
+    remainingDetailsPage.appendChild(el("div", { class: "form-section arrival-details-placeholder" }, [
+      el("div", { class: "form-section-title" }, "Arrival Details"),
+      el("div", { class: "review-empty" }, "Arrival movement fields will be added here next. You can still review and finish this movement using the common Step 3."),
+    ]));
+  } else {
+    remainingDetailsPage.appendChild(timelineSection);
+  }
 
   const privateNumberCount = el("span", { class: "private-number-fab-count hidden" }, "0");
   const privateNumberFab = el("button", {
@@ -1378,7 +1419,7 @@ async function showForm(container, setHeaderTitle, entryId) {
 
   privateNumberFab.addEventListener("click", openPrivateNumberPrompt);
   renderPrivateNumberFab();
-  remainingDetailsPage.appendChild(privateNumberFab);
+  if (!isArrivalMovement) remainingDetailsPage.appendChild(privateNumberFab);
 
   const officialsCount = el("span", { class: "private-number-fab-count hidden" }, "0");
   const officialsFab = el("button", {
@@ -1504,24 +1545,134 @@ async function showForm(container, setHeaderTitle, entryId) {
   renderOfficialsFab();
   container.appendChild(officialsFab);
 
-  // --- Remarks ---
-  const remarksSection = el("div", { class: "form-section" });
-  remarksSection.appendChild(el("div", { class: "form-section-title" }, "Remarks"));
-  remarksSection.appendChild(el("div", { class: "form-row" }, [
-    el("textarea", { oninput: (e) => { entry.remarks = e.target.value; onFieldChange(); } }, entry.remarks || ""),
-  ]));
-  remainingDetailsPage.appendChild(remarksSection);
+  function reviewField(label, value) {
+    return el("div", { class: "review-field" }, [
+      el("div", { class: "review-field-label" }, [
+        el("span", { class: "field-label-icon", "aria-hidden": "true" }, fieldIconForLabel(label)),
+        el("span", {}, label),
+      ]),
+      el("div", { class: "review-field-value" }, value || "—"),
+    ]);
+  }
+
+  function renderReviewPage() {
+    reviewSubmitPage.innerHTML = "";
+
+    const overviewSection = el("div", { class: "form-section review-section" }, [
+      el("div", { class: "form-section-title" }, "Record Summary"),
+      el("div", { class: "review-grid" }, [
+        reviewField("Movement", isArrivalMovement ? "Arrival" : "Departure"),
+        reviewField("Date", formatDate(entry.date)),
+        reviewField("Train", `${entry.trainNumber || "—"}${entry.trainName ? ` · ${entry.trainName}` : ""}`),
+        reviewField("Locomotive", entry.locomotiveNumberSnapshot || "—"),
+        reviewField("Type / Shed", [entry.locomotiveType, entry.locomotiveShed].filter(Boolean).join(" · ") || "—"),
+      ]),
+    ]);
+    reviewSubmitPage.appendChild(overviewSection);
+
+    const timelineSection = el("div", { class: "form-section review-section" }, [
+      el("div", { class: "form-section-title" }, isArrivalMovement ? "Arrival Summary" : "Movement Summary"),
+    ]);
+    const filledTimeline = TIMELINE_STEPS.filter((step) => entry[step.key]);
+    if (filledTimeline.length) {
+      timelineSection.appendChild(el("div", { class: "review-grid" }, filledTimeline.map((step) =>
+        reviewField(step.label, formatTime(entry[step.key]))
+      )));
+    } else {
+      timelineSection.appendChild(el("div", { class: "review-empty" }, isArrivalMovement
+        ? "Arrival details have not been added yet."
+        : "No movement times entered."));
+    }
+    reviewSubmitPage.appendChild(timelineSection);
+
+    const privateDetails = entry.privateNumberDetails.filter((detail) =>
+      detail.signalNumber || detail.fromLine || detail.toLine || detail.departureTime || detail.yardMasterName || detail.pmName
+    );
+    const privateSection = el("div", { class: "form-section review-section" }, [
+      el("div", { class: "form-section-title" }, `Private Number Details (${privateDetails.length})`),
+    ]);
+    if (!privateDetails.length) {
+      privateSection.appendChild(el("div", { class: "review-empty" }, "No Private Number Details added."));
+    } else {
+      privateDetails.forEach((detail, index) => {
+        privateSection.appendChild(el("div", { class: "review-entry-card" }, [
+          el("div", { class: "review-entry-title" }, [
+            el("span", {}, `Private Number ${index + 1}`),
+            detail.isComplete === true ? null : el("span", { class: "badge warn" }, "Draft"),
+          ]),
+          el("div", { class: "review-grid" }, [
+            reviewField("Signal Number", detail.signalNumber),
+            reviewField("From Line", detail.fromLine),
+            reviewField("To Line", detail.toLine),
+            reviewField("Dep Time", detail.departureTime ? formatTime(detail.departureTime) : "—"),
+            reviewField("Yard Master Name", detail.yardMasterName),
+            reviewField("PM Name", detail.pmName),
+          ]),
+        ]));
+      });
+    }
+    reviewSubmitPage.appendChild(privateSection);
+
+    const officials = entry.officialDetails.filter((detail) => detail.designation || detail.name);
+    const officialsSection = el("div", { class: "form-section review-section" }, [
+      el("div", { class: "form-section-title" }, `Officials (${officials.length})`),
+    ]);
+    if (!officials.length) {
+      officialsSection.appendChild(el("div", { class: "review-empty" }, "No officials added."));
+    } else {
+      officials.forEach((official, index) => {
+        officialsSection.appendChild(el("div", { class: "review-entry-card" }, [
+          el("div", { class: "review-entry-title" }, [
+            el("span", {}, `Official ${index + 1}`),
+            official.isComplete === true ? null : el("span", { class: "badge warn" }, "Draft"),
+          ]),
+          el("div", { class: "review-grid" }, [
+            reviewField("Designation", official.designation),
+            reviewField("Name", official.name),
+          ]),
+        ]));
+      });
+    }
+    reviewSubmitPage.appendChild(officialsSection);
+
+    const remarksSection = el("div", { class: "form-section" });
+    remarksSection.appendChild(el("div", { class: "form-section-title" }, "Remarks"));
+    remarksSection.appendChild(el("div", { class: "form-row" }, [
+      el("textarea", {
+        value: entry.remarks || "",
+        placeholder: "Add final remarks",
+        oninput: (event) => {
+          entry.remarks = event.target.value;
+          onFieldChange();
+        },
+      }, entry.remarks || ""),
+    ]));
+    reviewSubmitPage.appendChild(remarksSection);
+    reviewSubmitPage.appendChild(el("button", {
+      class: "primary-btn",
+      type: "button",
+      style: "width:100%;margin-bottom:10px;",
+      onclick: openSubmissionShare,
+    }, "Submit & Open Share Screen"));
+    reviewSubmitPage.appendChild(el("button", {
+      class: "secondary-btn",
+      type: "button",
+      style: "width:100%;margin-bottom:12px;",
+      onclick: () => showWizardPage(2),
+    }, isArrivalMovement ? "← Arrival Details" : "← Movement Details"));
+  }
+
   remainingDetailsPage.appendChild(el("button", {
     class: "primary-btn",
     type: "button",
     style: "width:100%;margin-bottom:10px;",
-    onclick: finalizeEntry,
-  }, "Save Record"));
+    onclick: () => showWizardPage(3),
+  }, "Next: Review & Submit →"));
   remainingDetailsPage.appendChild(el("button", {
     class: "secondary-btn",
     type: "button",
     style: "width:100%;margin-bottom:12px;",
-    onclick: () => showDeparturePage(1),
+    onclick: () => showWizardPage(1),
   }, "← Train & Loco Details"));
-  showDeparturePage(isArrivalMovement ? 1 : entry.draftPage, false);
+  showWizardPage(entry.draftPage, false);
 }

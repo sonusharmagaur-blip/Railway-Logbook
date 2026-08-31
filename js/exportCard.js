@@ -1,10 +1,11 @@
 import { DB } from "./db.js";
 import { kmFieldLabel } from "./models.js";
 import { UICStatus } from "./models.js";
-import { el, formatDate } from "./util.js";
+import { el, formatDate, formatTime } from "./util.js";
 
 const SCALE = 3; // render at 3x for a crisp shareable image
 const CARD_WIDTH = 360;
+const WATERMARK_URL = new URL("../wap7-share-watermark.png", import.meta.url).href;
 
 const COLORS = {
   headerBg: "#7b1e14",
@@ -43,7 +44,20 @@ function buildFields(entry, locomotives, profile) {
     uicValue += ` (${entry.uicCableOption})`;
   }
 
+  const privateNumberSummary = (entry.privateNumberDetails || [])
+    .filter((detail) => detail.signalNumber || detail.fromLine || detail.toLine || detail.departureTime || detail.yardMasterName || detail.pmName)
+    .map((detail, index) => {
+      const route = [detail.fromLine, detail.toLine].filter(Boolean).join(" → ");
+      return `#${index + 1} Signal ${detail.signalNumber || "—"}${route ? ` · ${route}` : ""}${detail.departureTime ? ` · ${formatTime(detail.departureTime)}` : ""}`;
+    })
+    .join(" | ") || "None";
+  const officialsSummary = (entry.officialDetails || [])
+    .filter((detail) => detail.designation || detail.name)
+    .map((detail) => `${detail.designation || "Official"}: ${detail.name || "—"}`)
+    .join(" | ") || "None";
+
   return [
+    { label: "Movement", value: entry.movementType === "arrival" ? "Arrival" : "Departure" },
     { label: "Date", value: formatDate(entry.date) || "—" },
     { label: "Train", value: `${entry.trainNumber || "—"}${entry.trainName ? " — " + entry.trainName : ""}` },
     { label: "Locomotive", value: locoNumber },
@@ -56,11 +70,27 @@ function buildFields(entry, locomotives, profile) {
     { label: "Major Schedule", value: `${entry.majorScheduleTypeCode || "—"}${entry.majorScheduleDate ? " — " + formatDate(entry.majorScheduleDate) : ""}` },
     { label: "Minor Schedule / TI", value: entry.minorScheduleTIDate ? formatDate(entry.minorScheduleTIDate) : "Not available" },
     { label: kmFieldLabel(entry), value: entry.kmSinceLastSchedule != null ? String(entry.kmSinceLastSchedule) : "—" },
+    { label: "Loco Takeover", value: entry.locoTakeoverTime ? formatTime(entry.locoTakeoverTime) : "—" },
+    { label: "Loco Offer", value: entry.locoOfferTime ? formatTime(entry.locoOfferTime) : "—" },
+    { label: "Yard Departure", value: entry.departureTime ? formatTime(entry.departureTime) : "—" },
+    { label: "Placement", value: entry.placementTime ? formatTime(entry.placementTime) : "—" },
+    { label: "Private Number Details", value: privateNumberSummary },
+    { label: "Officials", value: officialsSummary },
+    { label: "Remarks", value: entry.remarks || "—" },
     { label: "Pilot", value: (profile && profile.name) || "—" },
   ];
 }
 
-function drawCard(canvas, fields) {
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
+function drawCard(canvas, fields, watermarkImage) {
   const rowPadding = 12;
   const labelSize = 12;
   const valueSize = 16;
@@ -89,6 +119,18 @@ function drawCard(canvas, fields) {
   ctx.fillStyle = COLORS.cardBg;
   roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 12);
   ctx.fill();
+
+  if (watermarkImage) {
+    const imageWidth = CARD_WIDTH - 16;
+    const imageHeight = imageWidth * (watermarkImage.naturalHeight / watermarkImage.naturalWidth);
+    const imageY = headerHeight + Math.max(30, (bodyHeight - imageHeight) / 2);
+    ctx.save();
+    roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 12);
+    ctx.clip();
+    ctx.globalAlpha = 0.2;
+    ctx.drawImage(watermarkImage, 8, imageY, imageWidth, imageHeight);
+    ctx.restore();
+  }
 
   // Header
   ctx.save();
@@ -142,15 +184,16 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-export async function openExportCard(entry, locomotives) {
+export async function openExportCard(entry, locomotives, options = {}) {
   const profile = await DB.get("profile", "singleton");
   const fields = buildFields(entry, locomotives, profile);
+  const watermarkImage = await loadImage(WATERMARK_URL);
 
   const overlay = el("div", { class: "overlay" });
   const canvasWrap = el("div", { class: "duty-card-canvas-wrap" });
   const canvas = el("canvas");
   canvasWrap.appendChild(canvas);
-  drawCard(canvas, fields);
+  drawCard(canvas, fields, watermarkImage);
 
   const shareBtn = el("button", { class: "primary-btn", onclick: async () => {
     canvas.toBlob(async (blob) => {
@@ -174,13 +217,26 @@ export async function openExportCard(entry, locomotives) {
     }, "image/png");
   } }, "Share / Save Image");
 
-  const closeBtn = el("button", { class: "secondary-btn", style: "margin-top:8px;", onclick: () => overlay.remove() }, "Close");
+  const doneBtn = el("button", {
+    class: "final-done-btn",
+    type: "button",
+    onclick: async () => {
+      doneBtn.disabled = true;
+      try {
+        if (typeof options.onDone === "function") await options.onDone();
+        overlay.remove();
+      } finally {
+        doneBtn.disabled = false;
+      }
+    },
+  }, options.doneLabel || "Done");
 
-  const card = el("div", { class: "overlay-card" }, [
-    el("h2", {}, "Duty Card"),
+  const card = el("div", { class: "overlay-card share-card-dialog" }, [
+    el("h2", {}, "Share Duty Card"),
+    el("p", {}, "Save or share the movement card, then tap Done at the end."),
     canvasWrap,
     shareBtn,
-    closeBtn,
+    doneBtn,
   ]);
   overlay.appendChild(card);
   document.body.appendChild(overlay);
