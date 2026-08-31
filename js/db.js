@@ -1,8 +1,9 @@
 // Thin promise-based wrapper around IndexedDB for RailwayLogbook.
-// Object stores: locomotives, dutyEntries, scheduleTypes, profile, meta
+// Object stores: locomotives, dutyEntries, adjustmentRecords, staffMembers,
+// scheduleTypes, profile, meta
 
 const DB_NAME = "railwaylogbook";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -18,6 +19,15 @@ function openDB() {
       if (!db.objectStoreNames.contains("dutyEntries")) {
         const store = db.createObjectStore("dutyEntries", { keyPath: "id" });
         store.createIndex("date", "date");
+      }
+      if (!db.objectStoreNames.contains("adjustmentRecords")) {
+        const store = db.createObjectStore("adjustmentRecords", { keyPath: "id" });
+        store.createIndex("date", "date");
+        store.createIndex("staffName", "staffName");
+      }
+      if (!db.objectStoreNames.contains("staffMembers")) {
+        const store = db.createObjectStore("staffMembers", { keyPath: "id" });
+        store.createIndex("name", "name");
       }
       if (!db.objectStoreNames.contains("scheduleTypes")) {
         db.createObjectStore("scheduleTypes", { keyPath: "code" });

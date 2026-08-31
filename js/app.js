@@ -1,6 +1,7 @@
 import { DB } from "./db.js";
-import { DEFAULT_SCHEDULE_TYPES, newProfile } from "./models.js";
+import { DEFAULT_SCHEDULE_TYPES, DEFAULT_STAFF_NAMES, newProfile } from "./models.js";
 import { mountDutyTab } from "./dutyEntries.js";
+import { mountDutyAdjustmentTab } from "./dutyAdjustments.js";
 import { mountSettingsTab } from "./settings.js";
 import { attemptOpportunisticBackup, createLocalDailySnapshot } from "./drive.js";
 
@@ -10,6 +11,7 @@ const tabButtons = document.querySelectorAll(".tab-btn");
 
 const TABS = {
   duty: { mount: mountDutyTab },
+  adjustments: { mount: mountDutyAdjustmentTab },
   settings: { mount: mountSettingsTab },
 };
 
@@ -34,6 +36,17 @@ async function seedDefaultsIfNeeded() {
   if (existingTypes.length === 0) {
     for (let i = 0; i < DEFAULT_SCHEDULE_TYPES.length; i++) {
       await DB.put("scheduleTypes", { code: DEFAULT_SCHEDULE_TYPES[i], displayOrder: i, isUserAdded: false });
+    }
+  }
+  const existingStaff = await DB.getAll("staffMembers");
+  if (existingStaff.length === 0) {
+    const seededAt = new Date().toISOString();
+    for (let i = 0; i < DEFAULT_STAFF_NAMES.length; i++) {
+      await DB.put("staffMembers", {
+        id: `default-staff-${String(i + 1).padStart(3, "0")}`,
+        name: DEFAULT_STAFF_NAMES[i],
+        createdAt: seededAt,
+      });
     }
   }
   const profile = await DB.get("profile", "singleton");

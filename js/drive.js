@@ -146,18 +146,22 @@ function multipartBody(metadata, jsonContent) {
 }
 
 export async function buildBackupPayload() {
-  const [locomotives, dutyEntries, scheduleTypes, profileRow] = await Promise.all([
+  const [locomotives, dutyEntries, adjustmentRecords, staffMembers, scheduleTypes, profileRow] = await Promise.all([
     DB.getAll("locomotives"),
     DB.getAll("dutyEntries"),
+    DB.getAll("adjustmentRecords"),
+    DB.getAll("staffMembers"),
     DB.getAll("scheduleTypes"),
     DB.get("profile", "singleton"),
   ]);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: new Date().toISOString(),
     profile: profileRow || { name: "" },
     locomotives,
     dutyEntries,
+    adjustmentRecords,
+    staffMembers,
     scheduleTypes,
   };
 }
@@ -213,14 +217,22 @@ export async function restoreFromFile(fileId) {
 }
 
 export async function restoreFromPayload(payload) {
-  if (!payload || payload.schemaVersion !== 1) throw new Error("Unsupported backup schema version.");
+  if (!payload || ![1, 2].includes(payload.schemaVersion)) throw new Error("Unsupported backup schema version.");
   if (!Array.isArray(payload.locomotives) || !Array.isArray(payload.dutyEntries) || !Array.isArray(payload.scheduleTypes)) {
     throw new Error("Backup file is incomplete or invalid.");
   }
 
-  await Promise.all([DB.clear("locomotives"), DB.clear("dutyEntries"), DB.clear("scheduleTypes")]);
+  await Promise.all([
+    DB.clear("locomotives"),
+    DB.clear("dutyEntries"),
+    DB.clear("adjustmentRecords"),
+    DB.clear("staffMembers"),
+    DB.clear("scheduleTypes"),
+  ]);
   for (const loco of payload.locomotives || []) await DB.put("locomotives", loco);
   for (const entry of payload.dutyEntries || []) await DB.put("dutyEntries", entry);
+  for (const record of payload.adjustmentRecords || []) await DB.put("adjustmentRecords", record);
+  for (const staff of payload.staffMembers || []) await DB.put("staffMembers", staff);
   for (const st of payload.scheduleTypes || []) await DB.put("scheduleTypes", st);
   if (payload.profile) await DB.put("profile", { id: "singleton", name: payload.profile.name || "" });
   return true;
