@@ -1028,16 +1028,18 @@ html, body {
 .icon-action-label { font-size: 9px; font-weight: 750; letter-spacing: .02em; }
 .fab {
   position: fixed;
-  right: 18px;
-  bottom: calc(78px + var(--safe-bottom));
-  width: 54px; height: 54px;
+  right: calc(16.6667% - 32px);
+  bottom: calc(62px + var(--safe-bottom));
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: var(--maroon);
   color: white;
-  font-size: 28px;
+  font-size: 34px;
+  line-height: 1;
   border: none;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-  z-index: 5;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+  z-index: 24;
 }
 
 .toolbar-row {
