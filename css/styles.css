@@ -54,7 +54,7 @@ html, body {
   z-index: 0;
   left: 50%;
   top: 50%;
-  width: min(64vw, 330px);
+  width: min(78vw, 400px);
   aspect-ratio: 1;
   transform: translate(-50%, -46%);
   background: url("../icons/icon-512.png") center / contain no-repeat;
@@ -1113,4 +1113,49 @@ html, body {
   object-fit: contain;
   border-radius: var(--radius);
   border: 1px solid var(--border);
+}
+
+
+/* Compact mobile layout: less scrolling without shrinking readability. */
+@media (max-width: 600px) {
+  #app-header {
+    padding: calc(var(--safe-top) + 10px) 12px 10px;
+  }
+  #app-header h1 { font-size: 18px; }
+  #view-container {
+    padding: 8px 8px calc(10px + var(--safe-bottom));
+  }
+  .card {
+    padding: 9px 10px;
+    margin-bottom: 7px;
+  }
+  .form-section { margin-bottom: 8px; }
+  .form-section-title { padding: 7px 10px 3px; }
+  .form-row { padding: 6px 10px; }
+  .form-row label { margin-bottom: 3px; }
+  .form-row input[type="text"],
+  .form-row input[type="number"],
+  .form-row input[type="date"],
+  .form-row input[type="time"],
+  .form-row select,
+  .form-row textarea {
+    padding: 8px 9px;
+    font-size: 14px;
+  }
+  .form-row textarea { min-height: 48px; }
+  .primary-btn { padding: 10px 13px; font-size: 14px; }
+  .secondary-btn { padding: 9px 13px; font-size: 13px; }
+  .tab-btn { padding-top: 6px; padding-bottom: 5px; }
+  .tab-icon { font-size: 18px; }
+  .adjustment-filter-grid,
+  .adjustment-entry-grid {
+    gap: 7px;
+    padding: 7px 9px 9px;
+  }
+  .diary-wrap { padding-top: 2px; }
+  .diary-entry-page {
+    margin-bottom: 9px;
+    padding-top: 13px;
+    padding-bottom: 12px;
+  }
 }
