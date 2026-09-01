@@ -178,7 +178,7 @@ export async function performBackup({ interactive = false, clientId = null } = {
   const filename = `${Constants.backupFilenamePrefix}${dateStr}${Constants.backupFilenameExtension}`;
   const payload = await buildBackupPayload();
   const jsonContent = JSON.stringify(payload);
-  const { body, contentType } = multipartBody({ name: filename, parents: [folderId], mimeType: "application/json" }, jsonContent);
+  // Drive does not allow changing the parents field in file update metadata.\n  // Include parents only when creating a new backup file.\n  const existingFileId = await findFileInFolder(accessToken, folderId, filename);\n  const metadata = existingFileId\n    ? { name: filename, mimeType: "application/json" }\n    : { name: filename, parents: [folderId], mimeType: "application/json" };\n  const { body, contentType } = multipartBody(metadata, jsonContent);
 
   const existingFileId = await findFileInFolder(accessToken, folderId, filename);
   const url = existingFileId
