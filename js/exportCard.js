@@ -123,31 +123,31 @@ function drawDynamicLocoIdentity(ctx, entry) {
 
   // Front markings: positioned and weighted like the locomotive's original lettering.
   ctx.textAlign = "center";
-  ctx.font = `900 14px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+  ctx.font = `900 13px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
   if (locoType) {
     ctx.fillText(locoType, 55, 543);
     ctx.strokeText(locoType, 55, 543);
   }
+  if (locoShed) {
+    ctx.font = `900 11px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+    ctx.fillText(locoShed, 132, 543);
+    ctx.strokeText(locoShed, 132, 543);
+  }
   if (locoNumber) {
-    ctx.font = `900 14px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+    ctx.font = `900 13px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
     ctx.fillText(locoNumber, 210, 543);
     ctx.strokeText(locoNumber, 210, 543);
   }
-  if (locoShed) {
-    ctx.font = `850 8.5px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-    ctx.fillText(locoShed, 145, 563);
-  }
 
-  // Side markings follow the receding body perspective without labels or boxes.
-  ctx.translate(344, 554);
+  // The side carries only the locomotive number, aligned on the white panel above the red stripe.
+  ctx.translate(344, 487);
   ctx.rotate(0.035);
   ctx.scale(0.58, 1);
-  ctx.font = `900 10px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-  if (locoType) ctx.fillText(locoType, 0, -19);
   ctx.font = `900 12px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-  if (locoNumber) ctx.fillText(locoNumber, 0, -3);
-  ctx.font = `850 8px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-  if (locoShed) ctx.fillText(locoShed, 0, 12);
+  if (locoNumber) {
+    ctx.fillText(locoNumber, 0, 0);
+    ctx.strokeText(locoNumber, 0, 0);
+  }
   ctx.restore();
 }
 
