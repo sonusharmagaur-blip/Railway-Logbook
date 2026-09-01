@@ -307,7 +307,12 @@ export async function getLastBackupAt() {
 
 export async function isDriveBackupDue() {
   const last = await getLastBackupAt();
-  return !last || Date.now() - new Date(last).getTime() > Constants.minimumMsBetweenOpportunisticBackups;
+  if (!last) return true;
+  const lastDate = new Date(last);
+  if (Number.isNaN(lastDate.getTime())) return true;
+  // A Drive backup is due once per local calendar day. This makes the first
+  // app launch of each new day create that day's permanent dated backup.
+  return localDateString(lastDate) !== localDateString(new Date());
 }
 
 // Best-effort opportunistic backup: only fires if signed in and it's been a while.
