@@ -146,7 +146,8 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
       return cellPadding * 2 + labelSize + 6 + lines.length * valueLineHeight;
     }));
   });
-  const topRowCount = Math.min(4, rows.length);
+  const firstBottomRow = rows.findIndex((row) => row.some((field) => field.label === "AC" || field.label === "UIC"));
+  const topRowCount = firstBottomRow >= 0 ? firstBottomRow : Math.min(4, rows.length);
   const bottomRowCount = Math.max(0, rows.length - topRowCount);
   const topRowsHeight = rowHeights.slice(0, topRowCount).reduce((a, b) => a + b, 0)
     + Math.max(0, topRowCount - 1) * cellGap;
