@@ -135,8 +135,8 @@ export async function mountSettingsTab(container, setHeaderTitle) {
     el("label", {}, "Google OAuth Web Client ID"),
     clientIdInput,
     el("span", { class: "list-row-sub" }, "One free Google connection powers both lifetime Drive backups and Duty Adjustment Sheet sync."),
-    el("span", { class: "list-row-sub" }, "Drive retention: one dated backup per day, never auto-deleted by RailwayLogbook."),
-    el("span", { class: "list-row-sub" }, "Google access tokens expire by design. If needed, Backup Now asks you to reconnect; local saving never stops."),
+    el("span", { class: "list-row-sub" }, "Automatic protection: first app open each day saves locally and creates that day's dated Drive backup."),
+    el("span", { class: "list-row-sub" }, "Local snapshots keep the latest 30 days. Drive backups are kept for lifetime and are never auto-deleted. If Google asks, reconnect once to resume Drive backup."),
   ]));
   clientIdInput.onchange = async () => { await Drive.setClientId(clientIdInput.value.trim()); };
 
