@@ -98,6 +98,46 @@ function buildFields(entry, locomotives, profile) {
   return fields;
 }
 
+function drawDynamicLocoIdentity(ctx, entry) {
+  const locoNumber = String(entry.locomotiveNumberSnapshot || "").trim();
+  if (!locoNumber) return;
+  const locoShed = String(entry.locomotiveShed || "").trim().toUpperCase();
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // Cover the photographed front number and replace it with the duty-entry identity.
+  ctx.fillStyle = "rgba(225, 222, 210, 0.96)";
+  roundRect(ctx, 184, 526, 62, 37, 3);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(45, 43, 39, 0.45)";
+  ctx.lineWidth = 0.7;
+  ctx.stroke();
+  ctx.fillStyle = "#151515";
+  ctx.font = `850 14px ${FONT_STACK}`;
+  ctx.fillText(locoNumber, 215, 539);
+  if (locoShed) {
+    ctx.font = `800 7.5px ${FONT_STACK}`;
+    ctx.fillText(locoShed, 215, 553);
+  }
+
+  // Keep the smaller photographed side marking consistent with the entered number.
+  ctx.translate(344, 560);
+  ctx.rotate(0.035);
+  ctx.fillStyle = "rgba(220, 216, 202, 0.95)";
+  roundRect(ctx, -15, -18, 30, 36, 2);
+  ctx.fill();
+  ctx.fillStyle = "#171717";
+  ctx.font = `850 7px ${FONT_STACK}`;
+  ctx.fillText(locoNumber, 0, -4);
+  if (locoShed) {
+    ctx.font = `800 5.5px ${FONT_STACK}`;
+    ctx.fillText(locoShed, 0, 7);
+  }
+  ctx.restore();
+}
+
 function loadImage(src) {
   return new Promise((resolve) => {
     const image = new Image();
@@ -187,6 +227,8 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, CARD_WIDTH, totalHeight);
   ctx.restore();
+
+  drawDynamicLocoIdentity(ctx, entry);
 
   // Premium compact header leaves the sunset and locomotive visible.
   ctx.fillStyle = COLORS.headerText;
