@@ -145,7 +145,9 @@ export async function mountSettingsTab(container, setHeaderTitle) {
   backupSection.appendChild(statusRow);
   backupSection.appendChild(lastBackupRow);
 
-  let backupNowBtn = null;\n\n  async function refreshStatus() {
+  let backupNowBtn = null;
+
+  async function refreshStatus() {
     statusRow.innerHTML = "";
     lastBackupRow.innerHTML = "";
     const signedIn = Drive.isSignedIn();
@@ -199,7 +201,8 @@ export async function mountSettingsTab(container, setHeaderTitle) {
   } }, "Disconnect");
 
   backupSection.appendChild(el("div", { class: "form-row" }, [connectBtn, backupNowBtn, disconnectBtn]));
-  container.appendChild(backupSection);\n  await refreshStatus();
+  container.appendChild(backupSection);
+  await refreshStatus();
 
   // --- Google Sheet recordkeeping for Duty Adjustments ---
   const sheetSection = el("div", { class: "form-section" });
