@@ -178,9 +178,14 @@ export async function performBackup({ interactive = false, clientId = null } = {
   const filename = `${Constants.backupFilenamePrefix}${dateStr}${Constants.backupFilenameExtension}`;
   const payload = await buildBackupPayload();
   const jsonContent = JSON.stringify(payload);
-  // Drive does not allow changing the parents field in file update metadata.\n  // Include parents only when creating a new backup file.\n  const existingFileId = await findFileInFolder(accessToken, folderId, filename);\n  const metadata = existingFileId\n    ? { name: filename, mimeType: "application/json" }\n    : { name: filename, parents: [folderId], mimeType: "application/json" };\n  const { body, contentType } = multipartBody(metadata, jsonContent);
-
   const existingFileId = await findFileInFolder(accessToken, folderId, filename);
+  // Drive does not allow changing the parents field in file update metadata.
+  // Include parents only when creating a new backup file.
+  const metadata = existingFileId
+    ? { name: filename, mimeType: "application/json" }
+    : { name: filename, parents: [folderId], mimeType: "application/json" };
+  const { body, contentType } = multipartBody(metadata, jsonContent);
+
   const url = existingFileId
     ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart`
     : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
