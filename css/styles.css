@@ -1026,7 +1026,7 @@ html, body {
   stroke-linejoin: round;
 }
 .icon-action-label { font-size: 9px; font-weight: 750; letter-spacing: .02em; }
-.fab {
+#view-container > .fab {
   position: fixed;
   right: calc(16.6667% - 32px);
   bottom: calc(62px + var(--safe-bottom));
