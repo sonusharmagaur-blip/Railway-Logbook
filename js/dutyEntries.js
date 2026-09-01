@@ -1129,7 +1129,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   });
   tripSection.appendChild(el("div", { class: "form-row cab-pt-row" }, [
     el("div", { class: "cab-pt-grid" }, [
-      el("div", { class: "cab-pt-field" }, [fieldLabel("Cab"), cabSelect]),
+      el("div", { class: "cab-pt-field" }, [fieldLabel("Working Cab"), cabSelect]),
       el("div", { class: "cab-pt-field" }, [fieldLabel("PT Type"), ptTypeSelect]),
     ]),
   ]));
@@ -1239,7 +1239,7 @@ async function showForm(container, setHeaderTitle, entryId) {
         ]),
         additionalRecallNote,
         el("div", { class: "cab-pt-grid additional-cab-pt-grid" }, [
-          el("div", { class: "cab-pt-field" }, [fieldLabel("Cab"), additionalCabSelect]),
+          el("div", { class: "cab-pt-field" }, [fieldLabel("Working Cab"), additionalCabSelect]),
           el("div", { class: "cab-pt-field" }, [fieldLabel("PT Type"), additionalPTTypeSelect]),
         ]),
       ]);
@@ -1520,11 +1520,12 @@ async function showForm(container, setHeaderTitle, entryId) {
   componentSection.appendChild(uicCableComponentRow);
   renderHogDependentFields();
 
-  function createComponentDropdownField(label, fieldKey, options) {
+  function createComponentDropdownField(label, fieldKey, options, onSelect) {
     return el("div", { class: "schedule-field component-field" }, [
       fieldLabel(label),
       createDropdown(options, entry[fieldKey], (value) => {
         entry[fieldKey] = value;
+        if (onSelect) onSelect(value);
         onFieldChange();
       }, { "aria-label": label }),
     ]);
@@ -1545,14 +1546,21 @@ async function showForm(container, setHeaderTitle, entryId) {
     ]);
   }
 
+  const rtisStatusField = createComponentDropdownField("RTIS Status", "rtisStatus", RTIS_COMPONENT_STATUS_OPTIONS);
+  const acStatusField = createComponentDropdownField("AC Status", "acStatus", AC_COMPONENT_STATUS_OPTIONS);
+  function renderFittedStatusFields() {
+    rtisStatusField.classList.toggle("hidden", entry.rtisFitted === "Not Fitted");
+    acStatusField.classList.toggle("hidden", entry.acFitted === "Not Fitted");
+  }
   componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
-    createComponentDropdownField("RTIS", "rtisFitted", FITTED_OPTIONS),
-    createComponentDropdownField("RTIS Status", "rtisStatus", RTIS_COMPONENT_STATUS_OPTIONS),
+    createComponentDropdownField("RTIS", "rtisFitted", FITTED_OPTIONS, renderFittedStatusFields),
+    rtisStatusField,
   ]));
   componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
-    createComponentDropdownField("AC", "acFitted", FITTED_OPTIONS),
-    createComponentDropdownField("AC Status", "acStatus", AC_COMPONENT_STATUS_OPTIONS),
+    createComponentDropdownField("AC", "acFitted", FITTED_OPTIONS, renderFittedStatusFields),
+    acStatusField,
   ]));
+  renderFittedStatusFields();
   componentSection.appendChild(el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
     createComponentDropdownField("KAVACH Make", "kavachMake", KAVACH_MAKE_OPTIONS),
     createComponentDropdownField("KAVACH Status", "kavachStatus", KAVACH_STATUS_OPTIONS),
