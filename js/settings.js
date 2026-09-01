@@ -145,7 +145,7 @@ export async function mountSettingsTab(container, setHeaderTitle) {
   backupSection.appendChild(statusRow);
   backupSection.appendChild(lastBackupRow);
 
-  async function refreshStatus() {
+  let backupNowBtn = null;\n\n  async function refreshStatus() {
     statusRow.innerHTML = "";
     lastBackupRow.innerHTML = "";
     const signedIn = Drive.isSignedIn();
@@ -155,6 +155,11 @@ export async function mountSettingsTab(container, setHeaderTitle) {
       : configured ? "Reconnect needed for the next Drive backup" : "Google Drive not configured"));
     const [last, due] = await Promise.all([Drive.getLastBackupAt(), Drive.isDriveBackupDue()]);
     lastBackupRow.appendChild(el("label", {}, `${due ? "Daily backup due" : "Daily backup current"} · Last successful backup: ${formatRelative(last)}`));
+    if (backupNowBtn) {
+      const lastTime = last ? new Date(last).getTime() : NaN;
+      const missedForSevenDays = !Number.isFinite(lastTime) || Date.now() - lastTime >= 7 * 24 * 60 * 60 * 1000;
+      backupNowBtn.hidden = !missedForSevenDays;
+    }
   }
   await refreshStatus();
 
@@ -172,7 +177,7 @@ export async function mountSettingsTab(container, setHeaderTitle) {
     }
   } }, "Connect Google Account & Back Up");
 
-  const backupNowBtn = el("button", { class: "primary-btn", style: "margin-top:8px;", onclick: async () => {
+  backupNowBtn = el("button", { class: "primary-btn", style: "margin-top:8px;", onclick: async () => {
     backupNowBtn.textContent = "Backing up…";
     try {
       const clientId = clientIdInput.value.trim();
@@ -194,7 +199,7 @@ export async function mountSettingsTab(container, setHeaderTitle) {
   } }, "Disconnect");
 
   backupSection.appendChild(el("div", { class: "form-row" }, [connectBtn, backupNowBtn, disconnectBtn]));
-  container.appendChild(backupSection);
+  container.appendChild(backupSection);\n  await refreshStatus();
 
   // --- Google Sheet recordkeeping for Duty Adjustments ---
   const sheetSection = el("div", { class: "form-section" });
