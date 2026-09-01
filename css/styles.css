@@ -40,11 +40,34 @@ html, body {
 #app-header h1 { margin: 0; font-size: 20px; font-weight: 600; }
 
 #view-container {
+  position: relative;
+  isolation: isolate;
   flex: 1;
   overflow-y: auto;
   padding: 12px 12px calc(16px + var(--safe-bottom));
   -webkit-overflow-scrolling: touch;
 }
+
+#view-container::before {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  left: 50%;
+  top: 50%;
+  width: min(64vw, 330px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -46%);
+  background: url("../icons/icon-512.png") center / contain no-repeat;
+  opacity: 0.055;
+  pointer-events: none;
+}
+
+#view-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Share/result screen renders its existing locomotive photograph on canvas. */
 
 #tab-bar {
   display: flex;
