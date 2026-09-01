@@ -4,7 +4,9 @@ export function formatDate(isoDateStr) {
   if (!isoDateStr) return "";
   const d = new Date(isoDateStr + "T00:00:00");
   if (isNaN(d)) return isoDateStr;
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  return `${day}.${month}.${d.getFullYear()}`;
 }
 
 export function formatTime(isoTimeStr) {
@@ -112,7 +114,21 @@ export function el(tag, attrs = {}, children = []) {
   for (const [k, v] of Object.entries(attrs)) {
     if (k === "class") node.className = v;
     else if (k === "html") node.innerHTML = v;
-    else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+    else if (k.startsWith("on") && typeof v === "function") {
+      const eventName = k.slice(2);
+      node.addEventListener(eventName, (event) => {
+        if (
+          eventName === "input"
+          && (node.tagName === "TEXTAREA" || (node.tagName === "INPUT" && (!node.type || ["text", "search"].includes(node.type))))
+        ) {
+          const start = node.selectionStart;
+          const end = node.selectionEnd;
+          node.value = node.value.toUpperCase();
+          if (start !== null && end !== null) node.setSelectionRange(start, end);
+        }
+        v(event);
+      });
+    }
     else if (v !== null && v !== undefined) node.setAttribute(k, v);
   }
   for (const child of [].concat(children)) {
