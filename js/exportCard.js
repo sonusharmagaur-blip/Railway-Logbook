@@ -8,7 +8,7 @@ const SCALE = 3; // render at 3x for a crisp shareable image
 // The resulting PNG is exactly 1290 × 2796 pixels (approximately 19.5:9).
 const CARD_WIDTH = 430;
 const CARD_HEIGHT = 932;
-const BACKGROUND_URL = new URL("../wap7-share-background.png", import.meta.url).href;
+const BACKGROUND_URL = new URL("../wap7-share-background-clean.jpg", import.meta.url).href;
 const FONT_STACK = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Avenir Next", "Segoe UI", sans-serif';
 
 const COLORS = {
@@ -100,41 +100,54 @@ function buildFields(entry, locomotives, profile) {
 
 function drawDynamicLocoIdentity(ctx, entry) {
   const locoNumber = String(entry.locomotiveNumberSnapshot || "").trim();
-  if (!locoNumber) return;
   const locoShed = String(entry.locomotiveShed || "").trim().toUpperCase();
+  const rawType = String(entry.locomotiveType || "").trim().toUpperCase().replace(/\s+/g, "");
+  const typeLabels = {
+    WAP5: "WAP-5",
+    WAP7: "WAP-7",
+    WAG9: "WAG-9",
+    WAP4: "WAP-4",
+    WAG12: "WAG-12",
+    DSLLOCO: "DSL",
+  };
+  const locoType = typeLabels[rawType] || String(entry.locomotiveType || "").trim().toUpperCase();
+  if (!locoNumber && !locoShed && !locoType) return;
 
   ctx.save();
-  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(18, 18, 17, 0.92)";
+  ctx.strokeStyle = "rgba(245, 241, 226, 0.14)";
+  ctx.lineWidth = 0.45;
   ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(255, 255, 255, 0.16)";
+  ctx.shadowBlur = 0.7;
 
-  // Cover the photographed front number and replace it with the duty-entry identity.
-  ctx.fillStyle = "rgba(225, 222, 210, 0.96)";
-  roundRect(ctx, 184, 526, 62, 37, 3);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(45, 43, 39, 0.45)";
-  ctx.lineWidth = 0.7;
-  ctx.stroke();
-  ctx.fillStyle = "#151515";
-  ctx.font = `850 14px ${FONT_STACK}`;
-  ctx.fillText(locoNumber, 215, 539);
+  // Front markings: positioned and weighted like the locomotive's original lettering.
+  ctx.textAlign = "center";
+  ctx.font = `900 14px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+  if (locoType) {
+    ctx.fillText(locoType, 55, 543);
+    ctx.strokeText(locoType, 55, 543);
+  }
+  if (locoNumber) {
+    ctx.font = `900 14px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+    ctx.fillText(locoNumber, 210, 543);
+    ctx.strokeText(locoNumber, 210, 543);
+  }
   if (locoShed) {
-    ctx.font = `800 7.5px ${FONT_STACK}`;
-    ctx.fillText(locoShed, 215, 553);
+    ctx.font = `850 8.5px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+    ctx.fillText(locoShed, 145, 563);
   }
 
-  // Keep the smaller photographed side marking consistent with the entered number.
-  ctx.translate(344, 560);
+  // Side markings follow the receding body perspective without labels or boxes.
+  ctx.translate(344, 554);
   ctx.rotate(0.035);
-  ctx.fillStyle = "rgba(220, 216, 202, 0.95)";
-  roundRect(ctx, -15, -18, 30, 36, 2);
-  ctx.fill();
-  ctx.fillStyle = "#171717";
-  ctx.font = `850 7px ${FONT_STACK}`;
-  ctx.fillText(locoNumber, 0, -4);
-  if (locoShed) {
-    ctx.font = `800 5.5px ${FONT_STACK}`;
-    ctx.fillText(locoShed, 0, 7);
-  }
+  ctx.scale(0.58, 1);
+  ctx.font = `900 10px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+  if (locoType) ctx.fillText(locoType, 0, -19);
+  ctx.font = `900 12px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+  if (locoNumber) ctx.fillText(locoNumber, 0, -3);
+  ctx.font = `850 8px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+  if (locoShed) ctx.fillText(locoShed, 0, 12);
   ctx.restore();
 }
 
@@ -215,6 +228,8 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
     ctx.restore();
   }
 
+  drawDynamicLocoIdentity(ctx, entry);
+
   // A cinematic shade preserves the photograph while keeping all text readable.
   ctx.save();
   roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
@@ -227,8 +242,6 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, CARD_WIDTH, totalHeight);
   ctx.restore();
-
-  drawDynamicLocoIdentity(ctx, entry);
 
   // Premium compact header leaves the sunset and locomotive visible.
   ctx.fillStyle = COLORS.headerText;
