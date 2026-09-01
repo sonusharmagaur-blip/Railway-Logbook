@@ -38,18 +38,26 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
+function formatLongDate(isoDateStr) {
+  if (!isoDateStr) return "—";
+  const date = new Date(isoDateStr + "T00:00:00");
+  if (isNaN(date)) return isoDateStr;
+  const weekday = date.toLocaleDateString("en-GB", { weekday: "long" });
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = date.toLocaleDateString("en-GB", { month: "long" });
+  return `${weekday}, ${day} ${month} ${date.getFullYear()}`;
+}
+
 function buildFields(entry, locomotives, profile) {
   const loco = locomotives.find((l) => l.id === entry.locomotiveId);
   const locoNumber = (loco && loco.number) || entry.locomotiveNumberSnapshot || "—";
   const locoType = entry.locomotiveType || (loco && loco.locoClass) || "—";
   const locoShed = entry.locomotiveShed || (loco && loco.shed) || "—";
+  const locoSummary = `${locoNumber}   ·   ${locoType}   ·   ${locoShed}`;
 
   if (entry.movementType === "shed_shunting") {
     return [
-      { label: "Movement", value: "Shed Shunting" },
-      { label: "Date", value: formatDate(entry.date) || "—" },
-      { label: "Locomotive", value: locoNumber },
-      { label: "Shed", value: locoShed },
+      { label: "Loco Number · Type · Shed", value: locoSummary, fullWidth: true },
       { label: "TOC Time", value: entry.shuntingTocTime ? formatTime(entry.shuntingTocTime) : "—" },
       { label: "TOC Place", value: entry.shuntingTocPlace || "—" },
       { label: "Movement Upto", value: entry.shuntingMovementUpto || "—" },
@@ -64,21 +72,30 @@ function buildFields(entry, locomotives, profile) {
     uicValue += ` (${entry.uicCableOption})`;
   }
 
-  return [
-    { label: "Movement", value: entry.movementType === "arrival" ? "Arrival" : "Departure" },
-    { label: "Date", value: formatDate(entry.date) || "—" },
-    { label: "Train", value: `${entry.trainNumber || "—"}${entry.trainName ? " — " + entry.trainName : ""}` },
-    { label: "Locomotive", value: locoNumber },
-    { label: "Loco Type", value: locoType },
-    { label: "Shed", value: locoShed },
-    { label: "Cab", value: entry.cabSelection || "—" },
-    { label: "AC", value: entry.acStatus || "—" },
+  const offerPlace = entry.locoOfferPlace === "Other"
+    ? entry.locoOfferPlaceOther
+    : entry.locoOfferPlace;
+  const dotOffer = /DOT/i.test(offerPlace || "") ? offerPlace : "";
+  const fields = [
+    {
+      label: "Train Number · Name",
+      value: `${entry.trainNumber || "—"}${entry.trainName ? " — " + entry.trainName : ""}`,
+      fullWidth: !dotOffer,
+    },
+  ];
+  if (dotOffer) fields.push({ label: "Loco Offer Place", value: dotOffer });
+  fields.push(
+    { label: "Loco Number · Type · Shed", value: locoSummary, fullWidth: true },
+    { label: "PT Type", value: entry.locomotivePTType || "—" },
+    { label: "Working Cab", value: entry.cabSelection || "—" },
+    { label: "AC", value: entry.acFitted === "Not Fitted" ? "Not Fitted" : (entry.acStatus || "—") },
     { label: "UIC", value: uicValue },
-    { label: "RTIS", value: entry.rtisStatus || "—" },
+    { label: "RTIS", value: entry.rtisFitted === "Not Fitted" ? "Not Fitted" : (entry.rtisStatus || "—") },
     { label: "Major Schedule", value: `${entry.majorScheduleTypeCode || "—"}${entry.majorScheduleDate ? " — " + formatDate(entry.majorScheduleDate) : ""}` },
     { label: "Minor Schedule / TI", value: entry.minorScheduleTIDate ? formatDate(entry.minorScheduleTIDate) : "Not available" },
     { label: kmFieldLabel(entry), value: entry.kmSinceLastSchedule != null ? String(entry.kmSinceLastSchedule) : "—" },
-  ];
+  );
+  return fields;
 }
 
 function loadImage(src) {
@@ -90,7 +107,7 @@ function loadImage(src) {
   });
 }
 
-function drawCard(canvas, fields, backgroundImage, lpsName) {
+function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
   const cellPadding = 11;
   const labelSize = 9.5;
   const valueSize = 14;
@@ -101,11 +118,10 @@ function drawCard(canvas, fields, backgroundImage, lpsName) {
   const ctx = canvas.getContext("2d");
 
   // Compact two-column cards keep the exported image close to a phone-screen portrait.
-  const fullWidthLabels = new Set(["Train"]);
   const rows = [];
   let pendingField = null;
   for (const field of fields) {
-    if (fullWidthLabels.has(field.label)) {
+    if (field.fullWidth) {
       if (pendingField) rows.push([pendingField]);
       pendingField = null;
       rows.push([field]);
@@ -177,16 +193,19 @@ function drawCard(canvas, fields, backgroundImage, lpsName) {
   ctx.shadowBlur = 8;
   ctx.font = `800 23px ${FONT_STACK}`;
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("Daily Loco Movement Record", 18, 42);
+  const movementTitle = entry.movementType === "arrival"
+    ? "Arrival Movement"
+    : entry.movementType === "shed_shunting" ? "Shed Shunting" : "Departure Movement";
+  ctx.fillText(movementTitle, 18, 42);
   ctx.font = `650 12.5px ${FONT_STACK}`;
   ctx.fillStyle = "#ffe3ba";
   ctx.fillText(`LPS Name · ${lpsName}`, 18, 67);
   ctx.shadowBlur = 0;
   ctx.fillStyle = COLORS.accent;
   ctx.fillRect(18, 82, 74, 3);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
   ctx.font = `650 9px ${FONT_STACK}`;
-  ctx.fillText("RAILWAY LOGBOOK · MOBILE DUTY CARD", 103, 86);
+  ctx.fillText(formatLongDate(entry.date), 103, 86);
 
   // Split the seven detail rows around the locomotive: four rows at the top
   // and the remaining rows at the bottom leave a clear portrait window.
@@ -248,7 +267,7 @@ export async function openExportCard(entry, locomotives, options = {}) {
   const canvasWrap = el("div", { class: "duty-card-canvas-wrap" });
   const canvas = el("canvas");
   canvasWrap.appendChild(canvas);
-  drawCard(canvas, fields, backgroundImage, lpsName);
+  drawCard(canvas, fields, backgroundImage, lpsName, entry);
 
   const shareBtn = el("button", { class: "primary-btn", onclick: async () => {
     canvas.toBlob(async (blob) => {
