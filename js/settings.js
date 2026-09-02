@@ -172,8 +172,9 @@ export async function mountSettingsTab(container, setHeaderTitle) {
       await Drive.signIn({ forceConsent: true, clientId });
       await saveClientId;
       await Drive.performBackup();
-      showToast("Connected and backed up");
-      await refreshStatus();
+      const sheetSync = await Sheets.syncPendingAdjustmentRecords({ interactive: false });
+      showToast(sheetSync.synced > 0 ? `Connected, backed up and ${sheetSync.synced} Sheet record${sheetSync.synced === 1 ? "" : "s"} synced` : "Connected and backed up");
+      await Promise.all([refreshStatus(), refreshSheetStatus()]);
     } catch (e) {
       showToast(e.message || "Sign-in failed");
     }
