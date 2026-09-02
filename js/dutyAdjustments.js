@@ -75,8 +75,15 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
   ])].sort((a, b) => a.localeCompare(b));
   for (const name of filterNames) staffFilter.appendChild(el("option", { value: name }, name));
 
-  filters.appendChild(el("div", { class: "adjustment-filter-grid adjustment-staff-search-grid" }, [
+  const dateFilter = el("input", {
+    type: "date",
+    value: "",
+    "aria-label": "Filter by adjustment date",
+  });
+
+  filters.appendChild(el("div", { class: "adjustment-filter-grid adjustment-record-filter-grid" }, [
     el("div", { class: "adjustment-field" }, [el("label", {}, "Staff Name"), staffFilter]),
+    el("div", { class: "adjustment-field" }, [el("label", {}, "Date"), dateFilter]),
   ]));
   page.appendChild(filters);
 
@@ -87,14 +94,22 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
 
   function renderRecords() {
     const selectedName = staffFilter.value;
+    const selectedDate = dateFilter.value;
     let records = allRecords
-      .filter((record) => !selectedName || record.staffName === selectedName)
+      .filter((record) => (!selectedName || record.staffName === selectedName) && (!selectedDate || record.date === selectedDate))
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || ""));
 
-    if (!selectedName) records = records.slice(0, 3);
-    resultSummary.textContent = selectedName
-      ? `${records.length} record${records.length === 1 ? "" : "s"} for ${selectedName}`
-      : `Latest ${records.length} record${records.length === 1 ? "" : "s"}`;
+    const hasFilter = Boolean(selectedName || selectedDate);
+    if (!hasFilter) records = records.slice(0, 10);
+    if (selectedName && selectedDate) {
+      resultSummary.textContent = `${records.length} record${records.length === 1 ? "" : "s"} for ${selectedName} on ${formatDate(selectedDate)}`;
+    } else if (selectedName) {
+      resultSummary.textContent = `${records.length} record${records.length === 1 ? "" : "s"} for ${selectedName}`;
+    } else if (selectedDate) {
+      resultSummary.textContent = `${records.length} record${records.length === 1 ? "" : "s"} on ${formatDate(selectedDate)}`;
+    } else {
+      resultSummary.textContent = `Latest ${records.length} record${records.length === 1 ? "" : "s"}`;
+    }
     recordsHolder.innerHTML = "";
     if (!records.length) {
       recordsHolder.appendChild(el("div", { class: "empty-state adjustment-empty" }, allRecords.length
@@ -119,7 +134,7 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
     }
   }
 
-  staffFilter.addEventListener("change", renderRecords);
+  staffFilter.addEventListener("change", renderRecords);\n  dateFilter.addEventListener("change", renderRecords);
   renderRecords();
   container.appendChild(page);
 
@@ -301,7 +316,7 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
       }
       let savedMessage = `${rows.length} adjustment record${rows.length === 1 ? "" : "s"} saved.`;
       try {
-        const syncResult = await syncPendingAdjustmentRecords({ interactive: false });
+        const syncResult = await syncPendingAdjustmentRecords({ interactive: true });
         if (syncResult.synced > 0) savedMessage = `${savedMessage} Google Sheet synced.`;
       } catch (error) {
         savedMessage = `${savedMessage} Sheet sync pending.`;
