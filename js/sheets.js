@@ -153,6 +153,46 @@ export async function syncPendingAdjustmentRecords({ interactive = false } = {})
   return { status: "synced", synced, pending: 0, url: linked.url };
 }
 
+export async function pullAdjustmentRecordsFromSheet({ interactive = false } = {}) {
+  const linked = await getLinkedSheet();
+  if (!linked) return { status: "not-linked", imported: 0, total: 0 };
+  const token = await accessToken(interactive);
+  await ensureWorksheet(linked.id, token);
+  const range = encodeURIComponent(`'${SHEET_TITLE}'!A2:I`);
+  const response = await sheetsFetch(
+    `spreadsheets/${encodeURIComponent(linked.id)}/values/${range}?majorDimension=ROWS`,
+    token
+  );
+  const data = await response.json();
+  const rows = Array.isArray(data.values) ? data.values : [];
+  const existingIds = new Set((await DB.getAll("adjustmentRecords")).map((record) => record.id));
+  let imported = 0;
+  for (const values of rows) {
+    const [id, date, staffName, type, originalPosition, adjustedPosition, remark, savedAt, syncedAt] = values;
+    if (!id || !date) continue;
+    const knownType = ["Shift", "Link", "Rest"].includes(type);
+    await DB.put("adjustmentRecords", {
+      id,
+      batchId: "",
+      date: date || "",
+      staffName: staffName || "",
+      adjustmentType: knownType ? type : "Other",
+      adjustmentTypeOther: knownType ? "" : type || "",
+      originalPosition: originalPosition || "",
+      adjustedPosition: adjustedPosition || "",
+      remark: remark || "",
+      createdAt: savedAt || syncedAt || new Date().toISOString(),
+      lastModified: savedAt || syncedAt || new Date().toISOString(),
+      sheetSyncStatus: "synced",
+      sheetSyncedTo: linked.id,
+      sheetSyncedAt: syncedAt || null,
+    });
+    if (!existingIds.has(id)) imported += 1;
+  }
+  await DB.put("meta", { key: "lastAdjustmentSheetSyncAt", value: new Date().toISOString() });
+  return { status: "pulled", imported, total: rows.length, url: linked.url };
+}
+
 export async function countPendingAdjustmentRecords() {
   const linked = await getLinkedSheet();
   const records = await DB.getAll("adjustmentRecords");
