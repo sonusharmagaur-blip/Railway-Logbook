@@ -102,7 +102,7 @@ html, body {
   padding: 10px 14px 14px;
 }
 .adjustment-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.adjustment-staff-search-grid { grid-template-columns: minmax(0, 1fr); }
+.adjustment-staff-search-grid { grid-template-columns: minmax(0, 1fr); }\n.adjustment-record-filter-grid { grid-template-columns: minmax(0, 1fr) minmax(128px, .72fr); }\n.adjustment-record-filter-grid .adjustment-field:first-child { grid-column: auto; }
 .adjustment-field { min-width: 0; }
 .adjustment-field label {
   display: block;
@@ -257,7 +257,7 @@ html, body {
 
 @media (max-width: 400px) {
   .tab-btn { font-size: 10px; }
-  .adjustment-entry-grid { grid-template-columns: 1fr; }
+  .adjustment-entry-grid { grid-template-columns: 1fr; }\n  .adjustment-record-filter-grid { grid-template-columns: 1fr 1fr; }
   .adjustment-record-row { grid-template-columns: 66px minmax(0, 1fr) auto; gap: 7px; }
   .adjustment-position-line { grid-template-columns: auto minmax(0, 1fr); }
   .adjustment-position-arrow { display: none; }
