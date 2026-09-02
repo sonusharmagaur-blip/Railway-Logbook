@@ -1,7 +1,7 @@
 import { DB } from "./db.js";
 import { el, formatDate } from "./util.js";
 import { showToast } from "./toast.js";
-import { syncPendingAdjustmentRecords } from "./sheets.js";
+import { pullAdjustmentRecordsFromSheet, syncPendingAdjustmentRecords } from "./sheets.js";
 
 const ADJUSTMENT_TYPES = ["Shift", "Link", "Rest", "Other"];
 
@@ -85,6 +85,27 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
     el("div", { class: "adjustment-field" }, [el("label", {}, "Staff Name"), staffFilter]),
     el("div", { class: "adjustment-field" }, [el("label", {}, "Date"), dateFilter]),
   ]));
+  filters.appendChild(el("button", {
+    class: "secondary-btn adjustment-sheet-refresh-btn",
+    type: "button",
+    onclick: async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = "Checking Sheet…";
+      try {
+        const result = await pullAdjustmentRecordsFromSheet({ interactive: true });
+        if (result.status === "not-linked") throw new Error("Link a Google Sheet in Settings first.");
+        showToast(result.imported > 0
+          ? `${result.imported} record${result.imported === 1 ? "" : "s"} restored from Google Sheet.`
+          : result.total > 0 ? "Local records are up to date." : "No adjustment records found in Google Sheet.");
+        await mountDutyAdjustmentTab(container, setHeaderTitle);
+      } catch (error) {
+        showToast(error.message || "Could not refresh from Google Sheet.");
+        button.disabled = false;
+        button.textContent = "Refresh from Google Sheet";
+      }
+    },
+  }, "Refresh from Google Sheet"));
   page.appendChild(filters);
 
   const resultSummary = el("div", { class: "adjustment-result-summary" });
