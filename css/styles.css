@@ -102,7 +102,7 @@ html, body {
   padding: 10px 14px 14px;
 }
 .adjustment-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.adjustment-staff-search-grid { grid-template-columns: minmax(0, 1fr); }\n.adjustment-record-filter-grid { grid-template-columns: minmax(0, 1fr) minmax(128px, .72fr); }\n.adjustment-record-filter-grid .adjustment-field:first-child { grid-column: auto; }
+.adjustment-staff-search-grid { grid-template-columns: minmax(0, 1fr); }\n.adjustment-record-filter-grid { grid-template-columns: minmax(0, 1fr) minmax(128px, .72fr); }\n.adjustment-record-filter-grid .adjustment-field:first-child { grid-column: auto; }\n.adjustment-sheet-refresh-btn { width: calc(100% - 20px); margin: 0 10px 8px; padding-block: 8px; }
 .adjustment-field { min-width: 0; }
 .adjustment-field label {
   display: block;
