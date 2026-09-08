@@ -155,7 +155,8 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
     }
   }
 
-  staffFilter.addEventListener("change", renderRecords);\n  dateFilter.addEventListener("change", renderRecords);
+  staffFilter.addEventListener("change", renderRecords);
+  dateFilter.addEventListener("change", renderRecords);
   renderRecords();
   container.appendChild(page);
 
