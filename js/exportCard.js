@@ -72,14 +72,15 @@ function buildFields(entry, locomotives, profile) {
     uicValue += ` (${entry.uicCableOption})`;
   }
 
+  const isDot = entry.movementType === "arrival" && entry.isDotTrain === true;
   const offerPlace = entry.locoOfferPlace === "Other"
     ? entry.locoOfferPlaceOther
     : entry.locoOfferPlace;
   const dotOffer = /DOT/i.test(offerPlace || "") ? offerPlace : "";
   const fields = [
     {
-      label: "Train Number · Name",
-      value: `${entry.trainNumber || "—"}${entry.trainName ? " — " + entry.trainName : ""}`,
+      label: isDot ? "Arrival Train → Departure Train" : "Train Number · Name",
+      value: isDot ? `${entry.trainNumber || "—"} → ${entry.dotTrainNumber || "—"}${entry.dotTrainName ? " · " + entry.dotTrainName : ""}` : `${entry.trainNumber || "—"}${entry.trainName ? " — " + entry.trainName : ""}`,
       fullWidth: !dotOffer,
     },
   ];
@@ -249,7 +250,7 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
   ctx.shadowBlur = 8;
   ctx.font = `800 23px ${FONT_STACK}`;
   ctx.textBaseline = "alphabetic";
-  const movementTitle = entry.movementType === "arrival"
+  const movementTitle = entry.movementType === "arrival" && entry.isDotTrain ? "Departure Movement · DOT" : entry.movementType === "arrival"
     ? "Arrival Movement"
     : entry.movementType === "shed_shunting" ? "Shed Shunting" : "Departure Movement";
   ctx.fillText(movementTitle, 18, 42);
