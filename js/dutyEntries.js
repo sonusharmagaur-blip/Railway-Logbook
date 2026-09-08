@@ -913,6 +913,21 @@ async function showForm(container, setHeaderTitle, entryId) {
   if (entry.placementPfNumber === undefined) entry.placementPfNumber = "";
   if (entry.madeOverChargeName === undefined) entry.madeOverChargeName = "";
   if (entry.madeOverChargeHQ === undefined) entry.madeOverChargeHQ = "";
+  const arrivalTimeFields = [
+    "arrivalTime", "arrivalHogFromTime", "arrivalHogToTime", "arrivalTakeoverTime",
+    "arrivalDepartureTime", "arrivalPlacedTime", "arrivalDetachTime",
+    "arrivalYardDepartureTime", "arrivalShedArrivalTime",
+  ];
+  const arrivalTextFields = [
+    "arrivalAt", "arrivalTakeoverFrom", "arrivalSignalNumber", "arrivalPlace",
+    "arrivalPmName", "arrivalYardSignal", "arrivalLineNumber",
+  ];
+  for (const key of arrivalTimeFields) {
+    if (entry[key] === undefined) entry[key] = null;
+  }
+  for (const key of arrivalTextFields) {
+    if (entry[key] === undefined) entry[key] = "";
+  }
   if (entry.repairList === undefined) entry.repairList = "";
   if (!MAJOR_SCHEDULE_OPTIONS.includes(entry.majorScheduleTypeCode)) entry.majorScheduleTypeCode = MAJOR_SCHEDULE_OPTIONS[0];
   if (!Array.isArray(entry.minorSchedules)) {
@@ -1751,56 +1766,83 @@ async function showForm(container, setHeaderTitle, entryId) {
     ]);
   }
 
-  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
-    createMovementTimeField("Loco Takeover", "locoTakeoverTime"),
-    createMovementHistoryField("Place", "locoTakeoverPlace"),
-    createMovementTimeField("Checked Upto", "locoCheckedUptoTime"),
-  ]));
-  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
-    createMovementTimeField("Loco Offer", "locoOfferTime"),
-    createMovementDropdownField("Place", "locoOfferPlace", LOCO_OFFER_PLACE_OPTIONS, "locoOfferPlaceOther"),
-    createMovementTimeField("Dep Time", "locoOfferDepartureTime"),
-  ]));
-  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
-    createMovementTimeField("Engine On Train", "engineOnTrainTime"),
-    createMovementHistoryField("EOT Place", "engineOnTrainPlace"),
-  ]));
-  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
-    createMovementTimeField("HOG Attached From", "hogAttachedTime"),
-    createMovementTimeField("HOG Attached To", "hogAttachedToTime"),
-    createMovementHistoryField("Place", "hogAttachedPlace"),
-  ]));
-  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
-    createMovementTimeField("BP/FP Buildup Time", "bpFpTime"),
-    createMovementDropdownField("Place", "bpFpPlace", BP_FP_PLACE_OPTIONS, "bpFpPlaceOther"),
-  ]));
-
-  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
-    createMovementTimeField("Yard Dep", "departureTime"),
-    createMovementHistoryField("Signal", "yardSignal"),
-  ]));
-
-  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
-    createMovementTimeField("Placement Time", "placementTime"),
-    createMovementHistoryField("PF No.", "placementPfNumber"),
-  ]));
-  timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
-    createMovementTimeField("Cont. Time", "continuityTime"),
-    createMovementTimeField("BPC Time", "bpcTime"),
-  ]));
-  timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
-    createMovementManualField("Made Over Charge Name", "madeOverChargeName", "Name"),
-    createMovementManualField("HQ", "madeOverChargeHQ", "HQ"),
-    createMovementTimeField("Made Over Charge Time", "madeOverChargeTime"),
-  ]));
   if (isArrivalMovement) {
-    remainingDetailsPage.appendChild(el("div", { class: "form-section arrival-details-placeholder" }, [
-      el("div", { class: "form-section-title" }, "Arrival Details"),
-      el("div", { class: "review-empty" }, "Arrival movement fields will be added here next. You can still review and finish this movement using the common Step 3."),
+    timelineSection.firstElementChild.textContent = "Arrival Details";
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Arrival Time", "arrivalTime"),
+      createMovementHistoryField("Arrival At", "arrivalAt", "Station / place"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("HOG Time From", "arrivalHogFromTime"),
+      createMovementTimeField("HOG Time To", "arrivalHogToTime"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementHistoryField("Take Over From", "arrivalTakeoverFrom", "Name / designation"),
+      createMovementTimeField("Take Over Time", "arrivalTakeoverTime"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Departure Time", "arrivalDepartureTime"),
+      createMovementHistoryField("Signal Number", "arrivalSignalNumber", "Signal number"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Placed Time", "arrivalPlacedTime"),
+      createMovementHistoryField("Place", "arrivalPlace"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Detach Time", "arrivalDetachTime"),
+      createMovementHistoryField("PM Name", "arrivalPmName", "Name"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Dep Yard Time", "arrivalYardDepartureTime"),
+      createMovementHistoryField("Signal", "arrivalYardSignal"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Shed Arrival Time", "arrivalShedArrivalTime"),
+      createMovementHistoryField("Line No.", "arrivalLineNumber", "Line number"),
     ]));
   } else {
-    remainingDetailsPage.appendChild(timelineSection);
+    timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+      createMovementTimeField("Loco Takeover", "locoTakeoverTime"),
+      createMovementHistoryField("Place", "locoTakeoverPlace"),
+      createMovementTimeField("Checked Upto", "locoCheckedUptoTime"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+      createMovementTimeField("Loco Offer", "locoOfferTime"),
+      createMovementDropdownField("Place", "locoOfferPlace", LOCO_OFFER_PLACE_OPTIONS, "locoOfferPlaceOther"),
+      createMovementTimeField("Dep Time", "locoOfferDepartureTime"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Engine On Train", "engineOnTrainTime"),
+      createMovementHistoryField("EOT Place", "engineOnTrainPlace"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+      createMovementTimeField("HOG Attached From", "hogAttachedTime"),
+      createMovementTimeField("HOG Attached To", "hogAttachedToTime"),
+      createMovementHistoryField("Place", "hogAttachedPlace"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("BP/FP Buildup Time", "bpFpTime"),
+      createMovementDropdownField("Place", "bpFpPlace", BP_FP_PLACE_OPTIONS, "bpFpPlaceOther"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Yard Dep", "departureTime"),
+      createMovementHistoryField("Signal", "yardSignal"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Placement Time", "placementTime"),
+      createMovementHistoryField("PF No.", "placementPfNumber"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
+      createMovementTimeField("Cont. Time", "continuityTime"),
+      createMovementTimeField("BPC Time", "bpcTime"),
+    ]));
+    timelineSection.appendChild(el("div", { class: "movement-detail-row three-fields" }, [
+      createMovementManualField("Made Over Charge Name", "madeOverChargeName", "Name"),
+      createMovementManualField("HQ", "madeOverChargeHQ", "HQ"),
+      createMovementTimeField("Made Over Charge Time", "madeOverChargeTime"),
+    ]));
   }
+  remainingDetailsPage.appendChild(timelineSection);
 
   const privateNumberCount = el("span", { class: "private-number-fab-count hidden" }, "0");
   const privateNumberFab = el("button", {
@@ -2066,14 +2108,34 @@ async function showForm(container, setHeaderTitle, entryId) {
     const timelineSection = el("div", { class: "form-section review-section" }, [
       el("div", { class: "form-section-title" }, isArrivalMovement ? "Arrival Summary" : "Movement Summary"),
     ]);
-    const filledTimeline = TIMELINE_STEPS.filter((step) => entry[step.key]);
-    if (filledTimeline.length) {
-      timelineSection.appendChild(el("div", { class: "review-grid" }, filledTimeline.map((step) =>
-        reviewField(step.label, formatTime(entry[step.key]))
+    const arrivalReviewFields = [
+      { key: "arrivalTime", label: "Arrival Time", time: true },
+      { key: "arrivalAt", label: "Arrival At" },
+      { key: "arrivalHogFromTime", label: "HOG Time From", time: true },
+      { key: "arrivalHogToTime", label: "HOG Time To", time: true },
+      { key: "arrivalTakeoverFrom", label: "Take Over From" },
+      { key: "arrivalTakeoverTime", label: "Take Over Time", time: true },
+      { key: "arrivalDepartureTime", label: "Departure Time", time: true },
+      { key: "arrivalSignalNumber", label: "Signal Number" },
+      { key: "arrivalPlacedTime", label: "Placed Time", time: true },
+      { key: "arrivalPlace", label: "Place" },
+      { key: "arrivalDetachTime", label: "Detach Time", time: true },
+      { key: "arrivalPmName", label: "PM Name" },
+      { key: "arrivalYardDepartureTime", label: "Dep Yard Time", time: true },
+      { key: "arrivalYardSignal", label: "Signal" },
+      { key: "arrivalShedArrivalTime", label: "Shed Arrival Time", time: true },
+      { key: "arrivalLineNumber", label: "Line No." },
+    ];
+    const reviewDetails = isArrivalMovement
+      ? arrivalReviewFields.filter((field) => entry[field.key])
+      : TIMELINE_STEPS.filter((step) => entry[step.key]).map((step) => ({ ...step, time: true }));
+    if (reviewDetails.length) {
+      timelineSection.appendChild(el("div", { class: "review-grid" }, reviewDetails.map((field) =>
+        reviewField(field.label, field.time ? formatTime(entry[field.key]) : entry[field.key])
       )));
     } else {
       timelineSection.appendChild(el("div", { class: "review-empty" }, isArrivalMovement
-        ? "Arrival details have not been added yet."
+        ? "No arrival details entered."
         : "No movement times entered."));
     }
     reviewSubmitPage.appendChild(timelineSection);
