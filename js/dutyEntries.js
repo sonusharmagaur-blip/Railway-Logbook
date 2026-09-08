@@ -20,6 +20,7 @@ let currentUnwireLifecycle = null;
 let resumePromptDismissedForSession = false;
 
 function isEntryEmpty(entry) {
+  if (["arrivalTime","arrivalAt","arrivalHogFromTime","arrivalHogToTime","arrivalTakeoverFrom","arrivalTakeoverTime","arrivalDepartureTime","arrivalSignalNumber","arrivalPlacedTime","arrivalPlace","arrivalDetachTime","arrivalPmName","arrivalYardDepartureTime","arrivalYardSignal","arrivalShedArrivalTime","arrivalLineNumber"].some((key) => entry[key])) return false;
   if (entry.trainNumber || entry.trainName || entry.repairList || entry.remarks) return false;
   if (entry.shuntingTocTime || entry.shuntingTocPlace || entry.shuntingMovementUpto || entry.shuntingStableTime || entry.shuntingStablePlace || entry.shuntingCCName) return false;
   if (entry.locomotiveId || entry.locomotiveNumberSnapshot || entry.locomotiveType || entry.locomotiveShed) return false;
