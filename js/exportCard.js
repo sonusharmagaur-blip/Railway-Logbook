@@ -3,12 +3,12 @@ import { kmFieldLabel } from "./models.js";
 import { UICStatus } from "./models.js";
 import { el, formatDate, formatTime } from "./util.js";
 
-const SCALE = 3; // render at 3x for a crisp shareable image
-// iPhone 15 Plus portrait output: 430 × 932 logical pixels rendered at 3x.
-// The resulting PNG is exactly 1290 × 2796 pixels (approximately 19.5:9).
-const CARD_WIDTH = 430;
-const CARD_HEIGHT = 932;
-const BACKGROUND_URL = new URL("../wap7-share-background-clean.jpg", import.meta.url).href;
+// 540 × 675 logical pixels at 2x produces an exact 1080 × 1350 (4:5) image.
+const SCALE = 2;
+const CARD_WIDTH = 540;
+const CARD_HEIGHT = 675;
+import { SHARE_PHOTO } from "./sharePhoto.js";
+const BACKGROUND_URL = SHARE_PHOTO;
 const FONT_STACK = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Avenir Next", "Segoe UI", sans-serif';
 
 const COLORS = {
@@ -126,22 +126,22 @@ function drawDynamicLocoIdentity(ctx, entry) {
   ctx.textAlign = "center";
   ctx.font = `900 13px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
   if (locoType) {
-    ctx.fillText(locoType, 55, 543);
-    ctx.strokeText(locoType, 55, 543);
+    ctx.fillText(locoType, 123, 467);
+    ctx.strokeText(locoType, 123, 467);
   }
   if (locoShed) {
     ctx.font = `900 11px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-    ctx.fillText(locoShed, 132, 543);
-    ctx.strokeText(locoShed, 132, 543);
+    ctx.fillText(locoShed, 194, 467);
+    ctx.strokeText(locoShed, 194, 467);
   }
   if (locoNumber) {
     ctx.font = `900 13px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-    ctx.fillText(locoNumber, 210, 543);
-    ctx.strokeText(locoNumber, 210, 543);
+    ctx.fillText(locoNumber, 265, 467);
+    ctx.strokeText(locoNumber, 265, 467);
   }
 
   // The side carries only the locomotive number, aligned on the white panel above the red stripe.
-  ctx.translate(344, 487);
+  ctx.translate(421, 417);
   ctx.rotate(0.035);
   ctx.scale(0.58, 1);
   ctx.font = `900 12px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
@@ -162,13 +162,13 @@ function loadImage(src) {
 }
 
 function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
-  const cellPadding = 11;
+  const cellPadding = 8;
   const labelSize = 9.5;
   const valueSize = 14;
   const valueLineHeight = 18;
-  const headerHeight = 104;
+  const headerHeight = 92;
   const bodyInset = 12;
-  const cellGap = 8;
+  const cellGap = 6;
   const ctx = canvas.getContext("2d");
 
   // Compact two-column cards keep the exported image close to a phone-screen portrait.
@@ -190,7 +190,7 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
 
   const measureCanvas = document.createElement("canvas");
   const mctx = measureCanvas.getContext("2d");
-  mctx.font = `650 ${valueSize}px ${FONT_STACK}`;
+  mctx.font = `700 ${valueSize}px ${FONT_STACK}`;
   const innerWidth = CARD_WIDTH - bodyInset * 2;
   const columnWidth = (innerWidth - cellGap) / 2;
   const rowHeights = rows.map((row) => {
@@ -215,8 +215,8 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
   canvas.style.height = totalHeight + "px";
   ctx.scale(SCALE, SCALE);
 
-  // Full-bleed user-provided WAP-7 portrait. Its aspect ratio already closely
-  // matches the iPhone 15 Plus canvas, so the complete image is retained.
+  // Crop the original portrait uniformly; never squash the locomotive.
+  // Identity lettering uses the same transform as the new 540 × 675 artwork.
   ctx.fillStyle = COLORS.fallbackBg;
   roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
   ctx.fill();
@@ -225,11 +225,13 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
     ctx.save();
     roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
     ctx.clip();
-    ctx.drawImage(backgroundImage, 0, 0, CARD_WIDTH, totalHeight);
+    const photoScale = Math.max(CARD_WIDTH / 540, totalHeight / 675);
+    ctx.translate((CARD_WIDTH - 540 * photoScale) / 2, (totalHeight - 675 * photoScale) / 2);
+    ctx.scale(photoScale, photoScale);
+    ctx.drawImage(backgroundImage, 0, 0, 540, 675);
+    drawDynamicLocoIdentity(ctx, entry);
     ctx.restore();
   }
-
-  drawDynamicLocoIdentity(ctx, entry);
 
   // A cinematic shade preserves the photograph while keeping all text readable.
   ctx.save();
@@ -254,14 +256,14 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
     ? "Arrival Movement"
     : entry.movementType === "shed_shunting" ? "Shed Shunting" : "Departure Movement";
   ctx.fillText(movementTitle, 18, 42);
-  ctx.font = `650 12.5px ${FONT_STACK}`;
+  ctx.font = `700 12.5px ${FONT_STACK}`;
   ctx.fillStyle = "#ffe3ba";
   ctx.fillText(`LPS Name · ${lpsName}`, 18, 67);
   ctx.shadowBlur = 0;
   ctx.fillStyle = COLORS.accent;
   ctx.fillRect(18, 82, 74, 3);
   ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
-  ctx.font = `650 9px ${FONT_STACK}`;
+  ctx.font = `700 9px ${FONT_STACK}`;
   ctx.fillText(formatLongDate(entry.date), 103, 86);
 
   // Split the seven detail rows around the locomotive: four rows at the top
@@ -284,7 +286,7 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
 
       const labelY = y + cellPadding + labelSize;
       ctx.fillStyle = COLORS.label;
-      ctx.font = `750 ${labelSize}px ${FONT_STACK}`;
+      ctx.font = `700 ${labelSize}px ${FONT_STACK}`;
       ctx.fillText(field.label.toUpperCase(), x + cellPadding, labelY);
 
       ctx.fillStyle = COLORS.value;
@@ -314,6 +316,15 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+function buildShareCaption(entry) {
+  if (entry.movementType === "arrival" && entry.isDotTrain) {
+    return `ARRIVAL TN: ${entry.trainNumber || "—"}\nDEP TRAIN NUMBER: ${entry.dotTrainNumber || "—"}`;
+  }
+  if (entry.movementType === "arrival") return `ARRIVAL TN: ${entry.trainNumber || "—"}`;
+  if (entry.movementType === "shed_shunting") return `SHED SHUNTING · LOCO: ${entry.locomotiveNumberSnapshot || "—"}`;
+  return `DEP TRAIN NUMBER: ${entry.trainNumber || "—"}`;
+}
+
 export async function openExportCard(entry, locomotives, options = {}) {
   const profile = await DB.get("profile", "singleton");
   const fields = buildFields(entry, locomotives, profile);
@@ -326,26 +337,45 @@ export async function openExportCard(entry, locomotives, options = {}) {
   canvasWrap.appendChild(canvas);
   drawCard(canvas, fields, backgroundImage, lpsName, entry);
 
-  const shareBtn = el("button", { class: "primary-btn", onclick: async () => {
-    canvas.toBlob(async (blob) => {
-      const filename = `duty-card-${entry.date || "entry"}.png`;
-      if (navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: "image/png" })] })) {
-        try {
-          await navigator.share({ files: [new File([blob], filename, { type: "image/png" })], title: "Duty Card" });
-          return;
-        } catch (e) {
-          // user cancelled or share failed — fall through to download
-        }
+  const caption = buildShareCaption(entry);
+  // Encode before the tap so native sharing retains the user's activation.
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("Could not create the share image. Please try again.");
+  const filename = `duty-card-${entry.date || "entry"}.png`;
+  const file = new File([blob], filename, { type: "image/png" });
+  const captionInput = el("textarea", {
+    readonly: true, "aria-label": "Image caption", rows: 2,
+    style: "width:100%;box-sizing:border-box;resize:none;",
+  });
+  captionInput.value = caption;
+  const copyCaptionBtn = el("button", {
+    class: "secondary-btn", type: "button",
+    onclick: async () => {
+      try {
+        await navigator.clipboard.writeText(caption);
+        copyCaptionBtn.textContent = "Caption copied";
+      } catch {
+        captionInput.focus();
+        captionInput.select();
+        copyCaptionBtn.textContent = "Select and copy the caption above";
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    }, "image/png");
+    },
+  }, "Copy Caption");
+  const shareBtn = el("button", { class: "primary-btn", onclick: async () => {
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "Duty Card", text: caption });
+        return;
+      } catch (error) {
+        if (error.name === "AbortError") return;
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const link = el("a", { href: url, download: filename });
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   } }, "Share / Save Image");
 
   const doneBtn = el("button", {
@@ -364,8 +394,11 @@ export async function openExportCard(entry, locomotives, options = {}) {
 
   const card = el("div", { class: "overlay-card share-card-dialog" }, [
     el("h2", {}, "Share Duty Card"),
-    el("p", {}, "1290 × 2796 px portrait image · Save or share, then tap Done."),
+    el("p", {}, "1080 × 1350 px · 4:5 image · Save or share, then tap Done."),
     canvasWrap,
+    captionInput,
+    copyCaptionBtn,
+    el("p", {}, "If WhatsApp does not attach the caption, tap Copy Caption and paste it before sending."),
     shareBtn,
     doneBtn,
   ]);
