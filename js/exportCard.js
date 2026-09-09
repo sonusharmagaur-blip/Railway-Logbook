@@ -124,27 +124,27 @@ function drawDynamicLocoIdentity(ctx, entry) {
 
   // Front markings: positioned and weighted like the locomotive's original lettering.
   ctx.textAlign = "center";
-  ctx.font = `900 13px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+  ctx.font = `900 10px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
   if (locoType) {
-    ctx.fillText(locoType, 123, 467);
-    ctx.strokeText(locoType, 123, 467);
+    ctx.fillText(locoType, 70, 374);
+    ctx.strokeText(locoType, 70, 374);
   }
   if (locoShed) {
-    ctx.font = `900 11px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-    ctx.fillText(locoShed, 194, 467);
-    ctx.strokeText(locoShed, 194, 467);
+    ctx.font = `900 9px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+    ctx.fillText(locoShed, 116, 374);
+    ctx.strokeText(locoShed, 116, 374);
   }
   if (locoNumber) {
-    ctx.font = `900 13px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-    ctx.fillText(locoNumber, 265, 467);
-    ctx.strokeText(locoNumber, 265, 467);
+    ctx.font = `900 10px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+    ctx.fillText(locoNumber, 162, 374);
+    ctx.strokeText(locoNumber, 162, 374);
   }
 
   // The side carries only the locomotive number, aligned on the white panel above the red stripe.
-  ctx.translate(421, 417);
+  ctx.translate(342, 342);
   ctx.rotate(0.035);
   ctx.scale(0.58, 1);
-  ctx.font = `900 12px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
+  ctx.font = `900 11px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
   if (locoNumber) {
     ctx.fillText(locoNumber, 0, 0);
     ctx.strokeText(locoNumber, 0, 0);
@@ -162,11 +162,11 @@ function loadImage(src) {
 }
 
 function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
-  const cellPadding = 8;
-  const labelSize = 9.5;
-  const valueSize = 14;
-  const valueLineHeight = 18;
-  const headerHeight = 92;
+  const cellPadding = 6;
+  const labelSize = 9;
+  const valueSize = 13;
+  const valueLineHeight = 16;
+  const headerHeight = 80;
   const bodyInset = 12;
   const cellGap = 6;
   const ctx = canvas.getContext("2d");
@@ -238,9 +238,9 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
   roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
   ctx.clip();
   const shade = ctx.createLinearGradient(0, 0, 0, totalHeight);
-  shade.addColorStop(0, "rgba(2, 10, 18, 0.82)");
-  shade.addColorStop(0.16, "rgba(2, 10, 18, 0.22)");
-  shade.addColorStop(0.56, "rgba(2, 10, 18, 0.14)");
+  shade.addColorStop(0, "rgba(2, 10, 18, 0.65)");
+  shade.addColorStop(0.16, "rgba(2, 10, 18, 0.10)");
+  shade.addColorStop(0.56, "rgba(2, 10, 18, 0.04)");
   shade.addColorStop(1, "rgba(2, 10, 18, 0.72)");
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, CARD_WIDTH, totalHeight);
@@ -255,21 +255,21 @@ function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
   const movementTitle = entry.movementType === "arrival" && entry.isDotTrain ? "Departure Movement · DOT" : entry.movementType === "arrival"
     ? "Arrival Movement"
     : entry.movementType === "shed_shunting" ? "Shed Shunting" : "Departure Movement";
-  ctx.fillText(movementTitle, 18, 42);
+  ctx.fillText(movementTitle, 18, 32);
   ctx.font = `700 12.5px ${FONT_STACK}`;
   ctx.fillStyle = "#ffe3ba";
-  ctx.fillText(`LPS Name · ${lpsName}`, 18, 67);
+  ctx.fillText(`LPS Name · ${lpsName}`, 18, 54);
   ctx.shadowBlur = 0;
   ctx.fillStyle = COLORS.accent;
-  ctx.fillRect(18, 82, 74, 3);
+  ctx.fillRect(18, 68, 74, 3);
   ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
   ctx.font = `700 9px ${FONT_STACK}`;
-  ctx.fillText(formatLongDate(entry.date), 103, 86);
+  ctx.fillText(formatLongDate(entry.date), 103, 72);
 
   // Split the seven detail rows around the locomotive: four rows at the top
   // and the remaining rows at the bottom leave a clear portrait window.
   let topY = headerHeight + bodyInset;
-  let bottomY = Math.max(topY + topRowsHeight + 72, totalHeight - bottomRowsHeight - 28);
+  let bottomY = Math.max(topY + topRowsHeight + 72, totalHeight - bottomRowsHeight - 20);
   rows.forEach((row, rowIndex) => {
     const isTopRow = rowIndex < topRowCount;
     const y = isTopRow ? topY : bottomY;
