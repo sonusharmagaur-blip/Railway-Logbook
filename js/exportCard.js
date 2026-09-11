@@ -204,7 +204,7 @@ function drawPage(canvas, groups, entry, profile, logo) {
   ctx.font = `800 14px ${FONT}`;
   const trainLines = headerTrains.flatMap(text => wrap(ctx,text,462));
   const trainHeight = trainLines.length ? trainLines.length*18+12 : 0;
-  const height = Math.max(CARD_HEIGHT,180 + trainHeight + layout.reduce((n,g)=>n+30+g.rows.reduce((v,r)=>v+r.height,0),0)+52);
+  const height = Math.max(CARD_HEIGHT,180 + trainHeight + layout.reduce((n,g)=>n+(g.title === "Movement Identity" ? 7 : 30)+g.rows.reduce((v,r)=>v+r.height,0),0)+52);
   canvas.width=CARD_WIDTH*SCALE; canvas.height=Math.ceil(height*SCALE); ctx.scale(SCALE,SCALE);
   ctx.fillStyle=paper; rounded(ctx,0,0,CARD_WIDTH,height,22); ctx.fill();
   ctx.fillStyle="#f7ecd4"; ctx.fillRect(0,0,32,height);
@@ -232,12 +232,14 @@ function drawPage(canvas, groups, entry, profile, logo) {
   });
   let y=180+trainHeight;
   for(const group of layout) {
+    if (group.title !== "Movement Identity") {
     ctx.fillStyle=maroon;ctx.font=`800 11px ${FONT}`;ctx.fillText(group.title.toUpperCase(),50,y);
     ctx.strokeStyle="#cbb79b";ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(50,y+7);ctx.lineTo(512,y+7);ctx.stroke();y+=23;
+    }
     for(const row of group.rows) {
       row.pair.forEach((f,index)=>{
         const x=50+index*236;
-        ctx.fillStyle="#71594b";ctx.font=`700 8.5px ${FONT}`;f.labels.forEach((line,i)=>ctx.fillText(line,x,y+i*10));
+        ctx.fillStyle=group.title === "Movement Identity" ? ink : "#71594b";ctx.font=`800 8.5px ${FONT}`;f.labels.forEach((line,i)=>ctx.fillText(line,x,y+i*10));
         ctx.fillStyle=f.alert ? "#c01620" : ink;ctx.font=`700 11px ${FONT}`;f.values.forEach((line,i)=>ctx.fillText(line,f.stacked ? x : x+100,y+(f.stacked ? 16 : 0)+i*13,f.stacked ? 217 : f.fullWidth ? 362 : 117));
       });
       ctx.strokeStyle="rgba(170,143,109,.20)";ctx.beginPath();ctx.moveTo(50,y+row.height-11);ctx.lineTo(512,y+row.height-11);ctx.stroke();
