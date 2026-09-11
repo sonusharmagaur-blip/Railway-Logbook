@@ -121,10 +121,14 @@ function detailSections(entry, locomotives) {
     item("Repair List", entry.repairList), item("Remarks", entry.remarks),
     ...additional,
   ];
-  const privateNumbers = [
-    ...(entry.privateNumberDetails || []).flatMap((p,i) => Object.entries(p).filter(([k,v]) => !["id","isComplete"].includes(k) && v !== "" && v != null).map(([k,v]) => item("PN " + (i+1) + " · " + k.replace(/([A-Z])/g," $1"), /Time$/.test(k) ? time(v) : v))),
-    ...["privateNumber","yardMasterName","pmName"].filter(k=>entry[k]).map(k=>item(k.replace(/([A-Z])/g," $1"),entry[k])),
-  ];
+  const pnRecords = (entry.privateNumberDetails || []).filter(p => Object.entries(p).some(([k,v]) => !["id","isComplete"].includes(k) && v !== "" && v != null));
+  if (!pnRecords.length && (entry.privateNumber || entry.yardMasterName || entry.pmName)) {
+    pnRecords.push({signalNumber:entry.privateNumber,yardMasterName:entry.yardMasterName,pmName:entry.pmName});
+  }
+  const pnLabels = {signalNumber:"No.",fromLine:"From",toLine:"To",departureTime:"Dep",yardMasterName:"YM",pmName:"PM"};
+  const privateNumbers = pnRecords.map((p,i) => item("PN " + (i+1),
+    Object.entries(p).filter(([k,v]) => !["id","isComplete"].includes(k) && v !== "" && v != null)
+      .map(([k,v]) => (pnLabels[k] || k) + ": " + (/Time$/.test(k) ? time(v) : v)).join(" · ")));
   if (entry.movementType === "departure" || isDot) {
     trainRows.forEach(f => {
       if (["Train Number","Train Name","Arrival Train","Departure Train","Arrival Train Name","Departure Train Name"].includes(f.label)) f.inHeader = true;
