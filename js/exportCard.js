@@ -28,8 +28,17 @@ function longDate(value) {
 }
 function clean(value) { return String(value || "").trim(); }
 function item(label, value) { return { label, value: val(value) }; }
-function rowIf(items) { return items.filter(({ value, always }) => always || value !== "—"); }
+function rowIf(items) { return items.filter(({ value, always, pairKey }) => always || value !== "—" || pairKey && items.some(f => f.pairKey === pairKey && f.value !== "—")); }
 
+function majorScheduleOverdue(value, movementDate) {
+  const day = (input) => {
+    const parts = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(String(input || ""));
+    if (!parts) return NaN;
+    const stamp = Date.UTC(Number(parts[1]), Number(parts[2])-1, Number(parts[3]));
+    return new Date(stamp).toISOString().slice(0,10) === input ? stamp : NaN;
+  };
+  return (day(movementDate)-day(value))/86400000 > 90;
+}
 function detailSections(entry, locomotives) {
   const loco = locomotives.find((item) => item.id === entry.locomotiveId);
   const locoNumber = entry.locomotiveNumberSnapshot || loco?.number;
@@ -57,18 +66,22 @@ function detailSections(entry, locomotives) {
     item("AC", entry.acFitted === "Not Fitted" ? "Not Fitted" : entry.acStatus),
     item("Kavach Make", entry.kavachMake), item("Kavach Status", entry.kavachStatus),
     item("Brake System", entry.brakeSystem), item("SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake),
-    item("MC Status", entry.mcStatus), item("UBA DJ Open", entry.ubaDjOpen), item("UBA DJ Closed", entry.ubaDjClosed),
+    item("MC %", entry.mcStatus), item("UBA DJ Open", entry.ubaDjOpen), item("UBA DJ Closed", entry.ubaDjClosed),
   ];
+  for (const field of components) {
+    if (["SPM Make", "MC %"].includes(field.label)) field.pairKey = "spm";
+    if (["UBA DJ Open", "UBA DJ Closed"].includes(field.label)) field.pairKey = "uba";
+  }
   const minorEntries = (entry.minorSchedules || []).filter(m => m.date || m.km !== null && m.km !== undefined);
   if (!minorEntries.length && (entry.minorScheduleTIDate || entry.kmSinceLastSchedule != null)) {
     minorEntries.push({type:"TI",date:entry.minorScheduleTIDate,km:entry.kmSinceLastSchedule});
   }
-  const minorField = (schedule,index) => item(
+  const minorField = (schedule,index) => ({ ...item(
     "Minor Schedule" + (index ? " " + (index+1) : ""),
-    `${val(schedule.type)} · ${date(schedule.date)}${schedule.km != null && schedule.km !== "" ? "\nKM: " + schedule.km : ""}`
-  );
+    `${val(schedule.type)} · ${date(schedule.date)}${schedule.km != null && schedule.km !== "" ? " · KM-" + schedule.km : ""}`
+  ), alert: schedule.km !== "" && schedule.km != null && Number(schedule.km) > 4500 });
   const schedules = [
-    item("Major Schedule", `${val(entry.majorScheduleTypeCode)} · ${date(entry.majorScheduleDate)}`),
+    {...item("Major Schedule", `${val(entry.majorScheduleTypeCode)} · ${date(entry.majorScheduleDate)}${majorScheduleOverdue(entry.majorScheduleDate, entry.date) ? " (OVERDUE)" : ""}`), alert:majorScheduleOverdue(entry.majorScheduleDate, entry.date)},
     ...(minorEntries.length ? minorEntries.map(minorField) : [item("Minor Schedule", "—")]),
   ];
   const arrival = [
@@ -140,15 +153,26 @@ function prepareDiary(ctx, groups) {
   return groups.map(group => {
     const fields = group.rows.filter(f => group.title !== "Movement Identity" || !["Date","Movement","Loco Number","Loco Type","Shed"].includes(f.label));
     const rows = [];
-    for (let i=0; i<fields.length; i+=2) {
-      const pair = fields.slice(i,i+2).map(f => {
+    const pairs = [];
+    let pending = [];
+    for (const f of fields) {
+      if (pending.length && (pending[0].pairKey || f.pairKey) && pending[0].pairKey !== f.pairKey) {
+        pairs.push(pending); pending = [];
+      }
+      pending.push(f);
+      if (pending.length === 2) { pairs.push(pending); pending = []; }
+    }
+    if (pending.length) pairs.push(pending);
+    for (const fieldsPair of pairs) {
+      const pair = fieldsPair.map(f => {
+        const stacked = group.title === "Schedule Details";
         ctx.font = `700 8.5px ${FONT}`;
-        const labels = wrap(ctx, f.label.toUpperCase(), 94);
+        const labels = wrap(ctx, f.label.toUpperCase(), stacked ? 217 : 94);
         ctx.font = `700 11px ${FONT}`;
-        const values = wrap(ctx, f.value, 117);
-        return { labels, values };
+        const values = stacked ? [f.value] : wrap(ctx, f.value, 117);
+        return { labels, values, stacked, alert:f.alert };
       });
-      rows.push({pair, height:Math.max(25,...pair.map(f=>Math.max(f.labels.length*10,f.values.length*13)+9))});
+      rows.push({pair, height:Math.max(25,...pair.map(f=>f.stacked ? 38 : Math.max(f.labels.length*10,f.values.length*13)+9))});
     }
     return {title:group.title,rows};
   }).filter(g=>g.rows.length);
@@ -188,7 +212,7 @@ function drawPage(canvas, groups, entry, profile, logo) {
       row.pair.forEach((f,index)=>{
         const x=50+index*236;
         ctx.fillStyle="#71594b";ctx.font=`700 8.5px ${FONT}`;f.labels.forEach((line,i)=>ctx.fillText(line,x,y+i*10));
-        ctx.fillStyle=ink;ctx.font=`700 11px ${FONT}`;f.values.forEach((line,i)=>ctx.fillText(line,x+100,y+i*13));
+        ctx.fillStyle=f.alert ? "#c01620" : ink;ctx.font=`700 11px ${FONT}`;f.values.forEach((line,i)=>ctx.fillText(line,f.stacked ? x : x+100,y+(f.stacked ? 16 : 0)+i*13,f.stacked ? 217 : 117));
       });
       ctx.strokeStyle="rgba(170,143,109,.20)";ctx.beginPath();ctx.moveTo(50,y+row.height-11);ctx.lineTo(512,y+row.height-11);ctx.stroke();
       y+=row.height;
