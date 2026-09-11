@@ -153,7 +153,11 @@ const LOCO_RECALL_FIELDS = ["locomotivePTType","srMake","srMakeOther","hogMake",
 function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
   const history = new Map();
   const legacyById = new Map(locomotives.map((loco) => [loco.id, loco]));
-  const newestFirst = entries
+  const masterEntries = locomotives.filter(l => l.isLocoMaster).map(l => ({
+    ...l, id:l.sourceEntryId, locomotiveNumberSnapshot:l.number,
+    locomotiveType:l.locoClass, locomotiveShed:l.shed,
+  }));
+  const newestFirst = [...entries, ...masterEntries]
     .filter((candidate) => candidate.id !== currentEntryId && candidate.isDraft !== true)
     .sort((a, b) => (b.lastModified || "").localeCompare(a.lastModified || "") || (b.date || "").localeCompare(a.date || ""));
 
@@ -948,8 +952,9 @@ async function showForm(container, setHeaderTitle, entryId) {
     if (schedule.date === undefined) schedule.date = null;
     if (schedule.km === undefined) schedule.km = null;
   }
-  const locomotives = await DB.getAll("locomotives");
   const allDutyEntries = await DB.getAll("dutyEntries");
+  await DB.rememberLocomotives(allDutyEntries);
+  const locomotives = await DB.getAll("locomotives");
   const locomotiveHistory = buildLocomotiveHistory(allDutyEntries, locomotives, entry.id);
   const linkedLegacyLocomotive = locomotives.find((loco) => loco.id === entry.locomotiveId);
   if (!entry.locomotiveNumberSnapshot && linkedLegacyLocomotive) entry.locomotiveNumberSnapshot = normalizeLocomotiveNumber(linkedLegacyLocomotive.number);
