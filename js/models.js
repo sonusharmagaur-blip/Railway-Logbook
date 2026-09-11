@@ -34,7 +34,16 @@ export const MINOR_SCHEDULE_TYPE_OPTIONS = ["TI", "VC", "GC"];
 export const SR_BUR_MAKE_OPTIONS = ["MEDHA", "BT", "ABB", "CG", "SIEMENS", "BHEL", "Other"];
 export const HOG_MAKE_OPTIONS = ["SIEMENS", "MEDHA", "BHEL", "ABB", "CG", "ALL", "NON HOG", "Other"];
 export const HOG_STATUS_OPTIONS = ["WKG", "Not WKG", "HOG-1 Faulty", "HOG-2 Faulty"];
-export const COMPONENT_UIC_OPTIONS = ["Modified", "Normal"];
+export const COMPONENT_UIC_OPTIONS = ["Modified-Both Cable", "Modified-1 Cable", "Normal"];
+
+// Read older backups without discarding their UIC cable selection.
+export function uicDisplayStatus(entry) {
+  if (entry.uicStatus === UICStatus.MODIFIED) {
+    return entry.uicCableConnected === "1 Cable" || entry.uicCableOption === UICCableOption.ONE_CABLE
+      ? "Modified-1 Cable" : "Modified-Both Cable";
+  }
+  return entry.uicStatus || "Normal";
+}
 export const CABLE_CONNECTED_OPTIONS = ["2 Cables", "1 Cable", "HOG Not Connected"];
 export const FITTED_OPTIONS = ["Fitted", "Not Fitted"];
 export const RTIS_COMPONENT_STATUS_OPTIONS = ["Working", "Display Defective", "MCB Trip"];
