@@ -1165,3 +1165,8 @@ html, body {
     padding-bottom: 12px;
   }
 }
+
+/* Keep the officials action legible and reachable on narrow screens. */
+.officials-fab .private-number-fab-plus { display:block; color:#fff; font-size:28px; line-height:1; font-weight:900; flex-shrink:0; }
+.officials-inline-btn { display:block; width:100%; margin:12px 0; font-weight:800; min-height:44px; }
+.share-card-dialog canvas { max-width:100%; height:auto; }
