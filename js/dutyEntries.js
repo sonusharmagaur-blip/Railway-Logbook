@@ -4,7 +4,7 @@ import {
   ACStatus, UICStatus, LOCOMOTIVE_TYPE_OPTIONS, CAB_OPTIONS,
   PT_TYPE_OPTIONS, MAJOR_SCHEDULE_OPTIONS, MINOR_SCHEDULE_TYPE_OPTIONS,
   SR_BUR_MAKE_OPTIONS, HOG_MAKE_OPTIONS, HOG_STATUS_OPTIONS,
-  COMPONENT_UIC_OPTIONS, CABLE_CONNECTED_OPTIONS,
+  COMPONENT_UIC_OPTIONS, CABLE_CONNECTED_OPTIONS, uicDisplayStatus,
   FITTED_OPTIONS, RTIS_COMPONENT_STATUS_OPTIONS, AC_COMPONENT_STATUS_OPTIONS,
   KAVACH_MAKE_OPTIONS, KAVACH_STATUS_OPTIONS, BRAKE_SYSTEM_OPTIONS, SPM_MAKE_OPTIONS,
   LOCO_OFFER_PLACE_OPTIONS, BP_FP_PLACE_OPTIONS, OFFICIAL_DESIGNATION_OPTIONS,
@@ -549,8 +549,7 @@ async function showList(container, setHeaderTitle) {
       ["BUR Make", entry.burMake === "Other" ? entry.burMakeOther : entry.burMake],
       ["HOG Make", entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake],
       ["HOG Status", entry.hogStatus],
-      ["UIC", entry.uicStatus],
-      ["Cable Connected", entry.uicCableConnected],
+      ["UIC Status", uicDisplayStatus(entry)],
       ["RTIS", [entry.rtisFitted, entry.rtisStatus].filter(Boolean).join(" · ")],
       ["AC", [entry.acFitted, entry.acStatus].filter(Boolean).join(" · ")],
       ["KAVACH", [entry.kavachMake, entry.kavachStatus].filter(Boolean).join(" · ")],
@@ -845,6 +844,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   if (!SR_BUR_MAKE_OPTIONS.includes(entry.burMake)) entry.burMake = SR_BUR_MAKE_OPTIONS[0];
   if (!HOG_MAKE_OPTIONS.includes(entry.hogMake)) entry.hogMake = HOG_MAKE_OPTIONS[0];
   if (!HOG_STATUS_OPTIONS.includes(entry.hogStatus)) entry.hogStatus = HOG_STATUS_OPTIONS[0];
+  entry.uicStatus = uicDisplayStatus(entry);
   if (entry.hogMake === "NON HOG") entry.uicStatus = UICStatus.NON_HOG;
   else if (!COMPONENT_UIC_OPTIONS.includes(entry.uicStatus)) entry.uicStatus = "Normal";
   if (!CABLE_CONNECTED_OPTIONS.includes(entry.uicCableConnected)) {
@@ -1492,21 +1492,14 @@ async function showForm(container, setHeaderTitle, entryId) {
   ]));
   const componentUICSelect = createDropdown(COMPONENT_UIC_OPTIONS, COMPONENT_UIC_OPTIONS.includes(entry.uicStatus) ? entry.uicStatus : "Normal", (value) => {
     entry.uicStatus = value;
+    entry.uicCableConnected = value === "Modified-1 Cable" ? "1 Cable" : "2 Cables";
+    syncLegacyCableValue(entry.uicCableConnected);
     onFieldChange();
   }, { "aria-label": "UIC status" });
-  const cableConnectedSelect = createDropdown(CABLE_CONNECTED_OPTIONS, entry.uicCableConnected, (value) => {
-    entry.uicCableConnected = value;
-    syncLegacyCableValue(value);
-    onFieldChange();
-  }, { "aria-label": "Cable connected" });
   const uicCableComponentRow = el("div", { class: "schedule-fields-grid major-schedule-fields component-details-row" }, [
     el("div", { class: "schedule-field component-field" }, [
-      fieldLabel("UIC"),
+      fieldLabel("UIC Status"),
       componentUICSelect,
-    ]),
-    el("div", { class: "schedule-field component-field" }, [
-      fieldLabel("Cable Connected"),
-      cableConnectedSelect,
     ]),
   ]);
 
@@ -1521,7 +1514,6 @@ async function showForm(container, setHeaderTitle, entryId) {
       entry.uicCableConnected = CABLE_CONNECTED_OPTIONS[0];
     }
     componentUICSelect.value = COMPONENT_UIC_OPTIONS.includes(entry.uicStatus) ? entry.uicStatus : "Normal";
-    cableConnectedSelect.value = entry.uicCableConnected;
     syncLegacyCableValue(entry.uicCableConnected);
   }
 
@@ -1980,7 +1972,7 @@ async function showForm(container, setHeaderTitle, entryId) {
 
   privateNumberFab.addEventListener("click", openPrivateNumberPrompt);
   renderPrivateNumberFab();
-  if (!isArrivalMovement) remainingDetailsPage.appendChild(privateNumberFab);
+  remainingDetailsPage.appendChild(privateNumberFab);
 
   const officialsCount = el("span", { class: "private-number-fab-count hidden" }, "0");
   const officialsFab = el("button", {
