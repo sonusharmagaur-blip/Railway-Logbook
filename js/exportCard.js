@@ -129,7 +129,7 @@ function detailSections(entry, locomotives) {
   const privateNumbers = pnRecords.map((p,i) => item("PN " + (i+1),
     Object.entries(p).filter(([k,v]) => !["id","isComplete"].includes(k) && v !== "" && v != null)
       .map(([k,v]) => (pnLabels[k] || k) + ": " + (/Time$/.test(k) ? time(v) : v)).join(" · ")));
-  if (entry.movementType === "departure" || isDot) {
+  if (entry.movementType === "departure" || entry.movementType === "arrival") {
     trainRows.forEach(f => {
       if (["Train Number","Train Name","Arrival Train","Departure Train","Arrival Train Name","Departure Train Name"].includes(f.label)) f.inHeader = true;
     });
@@ -204,7 +204,8 @@ function drawPage(canvas, groups, entry, profile, logo) {
   const ctx = canvas.getContext("2d");
   const layout = prepareDiary(ctx, groups);
   const headerTrains = entry.movementType === "departure" ? [`${val(entry.trainNumber)} · ${val(entry.trainName)}`] :
-    entry.movementType === "arrival" && entry.isDotTrain ? [`ARRIVAL: ${val(entry.trainNumber)} · ${val(entry.trainName)}`, `DEP: ${val(entry.dotTrainNumber)} · ${val(entry.dotTrainName)}`] : [];
+    entry.movementType === "arrival" && entry.isDotTrain ? [`ARRIVAL: ${val(entry.trainNumber)} · ${val(entry.trainName)}`, `DEP: ${val(entry.dotTrainNumber)} · ${val(entry.dotTrainName)}`] :
+    entry.movementType === "arrival" ? [`${val(entry.trainNumber)} · ${val(entry.trainName)}`] : [];
   ctx.font = `800 14px ${FONT}`;
   const trainLines = headerTrains.flatMap(text => wrap(ctx,text,462));
   const trainHeight = trainLines.length ? trainLines.length*18+12 : 0;
