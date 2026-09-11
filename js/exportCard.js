@@ -92,7 +92,6 @@ function detailSections(entry, locomotives) {
   const extra = [
     item("Repair List", entry.repairList), item("Remarks", entry.remarks),
     ...officials, ...additional,
-    ...Object.entries(entry.spareItems || {}).filter(([k,v]) => k !== "otherText" && v === true).map(([k]) => item("Spare Item", ({bp:"BP",fp:"FP",sc:"SC",tsc:"TSC",fourWw:"4WW",fireExt:"2+2 FIRE EXTINGUISHERS",ptFuse:"2 PT FUSE",other:entry.spareItems.otherText || "OTHER"})[k] || k)),
     ...(entry.privateNumberDetails || []).flatMap((p,i) => Object.entries(p).filter(([k,v]) => !["id","isComplete"].includes(k) && v !== "" && v != null).map(([k,v]) => item("PN " + (i+1) + " · " + k.replace(/([A-Z])/g," $1"), /Time$/.test(k) ? time(v) : v))),
     ...["privateNumber","yardMasterName","pmName"].filter(k=>entry[k]).map(k=>item(k.replace(/([A-Z])/g," $1"),entry[k])),
   ];
@@ -125,44 +124,69 @@ function wrap(ctx, text, width) {
   }
   if (line) lines.push(line); return lines;
 }
-function pageHeight(groups, ctx) {
-  ctx.font = `700 11px ${FONT}`;
-  return Math.max(CARD_HEIGHT, 101 + groups.reduce((sum,g)=>sum+34+g.rows.reduce((n,f)=>n+Math.max(22,wrap(ctx,f.value,320).length*13+5,wrap(ctx,f.label.toUpperCase(),120).length*11+5),0),0)+55);
-}
 function paginate(sections) { return [sections]; }
-function drawLogoWatermark(ctx, logo) {
-  if (!logo) return;
-  ctx.save(); ctx.globalAlpha = .10;
-  ctx.drawImage(logo, 118, ctx.canvas.height / SCALE / 2 - 152, 304, 304); ctx.restore();
-}
-function drawPage(canvas, groups, entry, profile, logo, pageNumber, totalPages) {
-  const ctx = canvas.getContext("2d");
-  const height = pageHeight(groups, ctx); canvas.width = CARD_WIDTH * SCALE; canvas.height = height * SCALE; ctx.scale(SCALE, SCALE);
-  ctx.fillStyle = paper; rounded(ctx, 0, 0, CARD_WIDTH, height, 22); ctx.fill();
-  ctx.fillStyle = "#f7ecd4"; ctx.fillRect(0, 0, 32, height);
-  ctx.strokeStyle = "#7c6650"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(31, 0); ctx.lineTo(31, height); ctx.stroke();
-  for (let y = 18; y < height; y += 36) { ctx.fillStyle = "#f9fbfb"; ctx.beginPath(); ctx.arc(31, y, 6, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#ae9b85"; ctx.stroke(); }
-  drawLogoWatermark(ctx, logo);
-  ctx.fillStyle = maroon; ctx.fillRect(49, 26, 7, 54);
-  ctx.fillStyle = ink; ctx.font = `800 20px ${FONT}`; ctx.fillText(entry.movementType === "arrival" && entry.isDotTrain ? "DOT DEPARTURE RECORD" : entry.movementType === "arrival" ? "ARRIVAL MOVEMENT RECORD" : entry.movementType === "shed_shunting" ? "SHED SHUNTING RECORD" : "DEPARTURE MOVEMENT RECORD", 68, 49);
-  ctx.fillStyle = "#755a48"; ctx.font = `700 10px ${FONT}`; ctx.fillText(longDate(entry.date), 68, 70);
-  ctx.fillStyle = "#755a48"; ctx.textAlign = "right"; ctx.fillText("DUTY DIARY", 512, 70); ctx.textAlign = "left";
-  let y = 101;
-  for (const group of groups) {
-    ctx.fillStyle = maroon; ctx.font = `800 12px ${FONT}`; ctx.fillText(group.title.toUpperCase(), 52, y); y += 11;
-    ctx.strokeStyle = "#d3c2a7"; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(52, y); ctx.lineTo(510, y); ctx.stroke(); y += 13;
-    for (const field of group.rows) {
-      ctx.fillStyle = "#6d5447"; ctx.font = `700 9px ${FONT}`; const labels = wrap(ctx, field.label.toUpperCase(), 120); labels.forEach((line,index)=>ctx.fillText(line,52,y+index*11));
-      ctx.fillStyle = ink; ctx.font = `700 11px ${FONT}`;
-      const lines = wrap(ctx, field.value, 320);
-      lines.forEach((line, index) => ctx.fillText(line, 182, y + index * 13));
-      y += Math.max(22, lines.length * 13 + 5, labels.length * 11 + 5);
+function prepareDiary(ctx, groups) {
+  return groups.map(group => {
+    const fields = group.rows.filter(f => group.title !== "Movement Identity" || !["Date","Movement","Loco Number","Loco Type","Shed"].includes(f.label));
+    const rows = [];
+    for (let i=0; i<fields.length; i+=2) {
+      const pair = fields.slice(i,i+2).map(f => {
+        ctx.font = `700 8.5px ${FONT}`;
+        const labels = wrap(ctx, f.label.toUpperCase(), 94);
+        ctx.font = `700 11px ${FONT}`;
+        const values = wrap(ctx, f.value, 117);
+        return { labels, values };
+      });
+      rows.push({pair, height:Math.max(25,...pair.map(f=>Math.max(f.labels.length*10,f.values.length*13)+9))});
     }
-    y += 10;
+    return {title:group.title,rows};
+  }).filter(g=>g.rows.length);
+}
+function drawPage(canvas, groups, entry, profile, logo) {
+  const ctx = canvas.getContext("2d");
+  const layout = prepareDiary(ctx, groups);
+  const height = Math.max(CARD_HEIGHT,180 + layout.reduce((n,g)=>n+30+g.rows.reduce((v,r)=>v+r.height,0),0)+52);
+  canvas.width=CARD_WIDTH*SCALE; canvas.height=Math.ceil(height*SCALE); ctx.scale(SCALE,SCALE);
+  ctx.fillStyle=paper; rounded(ctx,0,0,CARD_WIDTH,height,22); ctx.fill();
+  ctx.fillStyle="#f7ecd4"; ctx.fillRect(0,0,32,height);
+  ctx.strokeStyle="#cbb79b"; ctx.lineWidth=1; ctx.beginPath();ctx.moveTo(31,0);ctx.lineTo(31,height);ctx.stroke();
+  for(let y=20;y<height;y+=36) {
+    ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(28,y,5,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle="#8d7862";ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(22,y,12,5,0,0,Math.PI*2);ctx.stroke();
   }
-  ctx.fillStyle = "rgba(123,31,27,.92)"; ctx.fillRect(44, height - 48, 468, 26);
-  ctx.fillStyle = "#fff8ef"; ctx.font = `700 9px ${FONT}`; ctx.fillText("RAILWAY LOGBOOK", 55, height - 31);
-  ctx.textAlign = "right"; ctx.fillText(`LPS NAME · ${clean(profile?.name) || "—"}`, 501, height - 31); ctx.textAlign = "left";
+  if(logo) {ctx.save();ctx.globalAlpha=.08;ctx.drawImage(logo,118,height/2-152,304,304);ctx.restore();}
+  ctx.fillStyle=maroon;ctx.fillRect(49,24,6,45);
+  ctx.fillStyle=ink;ctx.font=`800 19px ${FONT}`;
+  const title=entry.movementType==="arrival"&&entry.isDotTrain?"DOT DEPARTURE RECORD":entry.movementType==="arrival"?"ARRIVAL MOVEMENT RECORD":entry.movementType==="shed_shunting"?"SHED SHUNTING RECORD":"DEPARTURE MOVEMENT RECORD";
+  ctx.fillText(title,66,43,444);ctx.font=`700 10px ${FONT}`;ctx.fillStyle="#755a48";ctx.fillText(longDate(entry.date),66,64);
+  // Prominent locomotive identity; use resolved values from the existing field builder.
+  const identity=groups.find(g=>g.title==="Movement Identity")?.rows||[];
+  const field=name=>identity.find(f=>f.label===name)?.value||"—";
+  ctx.fillStyle=maroon;rounded(ctx,48,82,465,76,10);ctx.fill();
+  const blocks=[["LOCO NUMBER",field("Loco Number")],["TYPE",field("Loco Type")],["SHED",field("Shed")]];
+  blocks.forEach(([label,value],i)=>{
+    const x=62+i*153;
+    ctx.fillStyle="#ffdc98";ctx.font=`700 9px ${FONT}`;ctx.fillText(label,x,102);
+    ctx.fillStyle="#fffaf0";ctx.font=`800 23px ${FONT}`;ctx.fillText(value,x,137,136);
+  });
+  let y=180;
+  for(const group of layout) {
+    ctx.fillStyle=maroon;ctx.font=`800 11px ${FONT}`;ctx.fillText(group.title.toUpperCase(),50,y);
+    ctx.strokeStyle="#cbb79b";ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(50,y+7);ctx.lineTo(512,y+7);ctx.stroke();y+=23;
+    for(const row of group.rows) {
+      row.pair.forEach((f,index)=>{
+        const x=50+index*236;
+        ctx.fillStyle="#71594b";ctx.font=`700 8.5px ${FONT}`;f.labels.forEach((line,i)=>ctx.fillText(line,x,y+i*10));
+        ctx.fillStyle=ink;ctx.font=`700 11px ${FONT}`;f.values.forEach((line,i)=>ctx.fillText(line,x+100,y+i*13));
+      });
+      ctx.strokeStyle="rgba(170,143,109,.20)";ctx.beginPath();ctx.moveTo(50,y+row.height-11);ctx.lineTo(512,y+row.height-11);ctx.stroke();
+      y+=row.height;
+    }
+    y+=7;
+  }
+  ctx.fillStyle=maroon;ctx.fillRect(44,height-39,468,25);
+  ctx.fillStyle="#fff8ef";ctx.font=`700 9px ${FONT}`;ctx.fillText("RAILWAY LOGBOOK",54,height-23);
+  ctx.textAlign="right";ctx.fillText(`LPS · ${clean(profile?.name)||"—"}`,502,height-23,320);ctx.textAlign="left";
 }
 function caption(entry) {
   if (entry.movementType === "arrival" && entry.isDotTrain) return `ARRIVAL TN: ${val(entry.trainNumber)}\nDEP TRAIN NUMBER: ${val(entry.dotTrainNumber)}`;
@@ -184,5 +208,5 @@ export async function openExportCard(entry, locomotives, options = {}) {
     files.forEach((file) => { const url = URL.createObjectURL(file); const link = el("a",{href:url,download:file.name}); document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),5000); });
   } }, "Share Diary Image");
   const done = el("button", { class:"final-done-btn", type:"button", onclick: async () => { done.disabled=true; try { if(typeof options.onDone === "function") await options.onDone(); overlay.remove(); } finally { done.disabled=false; } } }, options.doneLabel || "Done");
-  overlay.appendChild(el("div",{class:"overlay-card share-card-dialog"},[el("h2",{},"Share Duty Diary"),el("p",{},"Complete movement record · one long spiral-diary image"),preview,captionArea,copy,share,done])); document.body.appendChild(overlay);
+  overlay.appendChild(el("div",{class:"overlay-card share-card-dialog"},[el("h2",{},"Share Duty Diary"),el("p",{},"Complete movement record · compact single-image duty diary"),preview,captionArea,copy,share,done])); document.body.appendChild(overlay);
 }
