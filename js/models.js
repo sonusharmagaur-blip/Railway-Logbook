@@ -212,6 +212,7 @@ export const TIMELINE_STEPS = [
   { key: "continuityTime", label: "Continuity" },
   { key: "bpcTime", label: "BPC" },
   { key: "madeOverChargeTime", label: "Made Over Charge" },
+  { key: "finalDepartureTime", label: "Final Departure" },
 ];
 
 function uuid() {
