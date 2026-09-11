@@ -56,7 +56,49 @@ function wrapRequest(req) {
   });
 }
 
+const MASTER_FIELDS = ["locomotivePTType","srMake","srMakeOther","hogMake","hogMakeOther","burMake","burMakeOther","acFitted","acStatus","rtisFitted","rtisStatus","uicStatus","uicCableConnected","uicCableOption"];
+
+function mergeLocoMasters(existing, entries) {
+  const masters = new Map(existing.filter(l => l.isLocoMaster).map(l => [l.number, l]));
+  const updates = new Map();
+  for (const entry of entries.filter(e => e.isDraft !== true).sort((a,b) => (a.lastModified || a.date || "").localeCompare(b.lastModified || b.date || ""))) {
+    const legacy = existing.find(l => l.id === entry.locomotiveId);
+    const number = String(entry.locomotiveNumberSnapshot || legacy?.number || "").replace(/[^0-9]/g, "");
+    if (!number) continue;
+    const stamp = entry.lastModified || entry.date || "";
+    const previous = masters.get(number);
+    if (previous && (previous.lastModified || "") >= stamp) continue;
+    const master = {...previous, id:"loco-master:"+number, number, isLocoMaster:true,
+      locoClass:entry.locomotiveType || legacy?.locoClass || previous?.locoClass || "",
+      shed:entry.locomotiveShed || legacy?.shed || previous?.shed || "",
+      lastModified:stamp, sourceEntryId:entry.id};
+    for (const key of MASTER_FIELDS) if (entry[key] !== undefined && entry[key] !== null) master[key] = entry[key];
+    masters.set(number, master); updates.set(number, master);
+  }
+  return [...updates.values()];
+}
+
+// Use the existing backed-up locomotives store; do not change the database version.
+async function saveWithLocoMaster(entries, dutyEntry) {
+  const db = await openDB();
+  return new Promise((resolve,reject) => {
+    const transaction = db.transaction(dutyEntry ? ["locomotives","dutyEntries"] : ["locomotives"], "readwrite");
+    transaction.oncomplete = () => resolve(dutyEntry?.id);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error || new Error("Loco master save aborted"));
+    if (dutyEntry) transaction.objectStore("dutyEntries").put(dutyEntry);
+    const store = transaction.objectStore("locomotives");
+    const request = store.getAll();
+    request.onsuccess = () => {
+      for (const master of mergeLocoMasters(request.result, entries)) store.put(master);
+    };
+  });
+}
+
 export const DB = {
+  async rememberLocomotives(entries) {
+    return saveWithLocoMaster(entries);
+  },
   async getAll(storeName) {
     const store = await tx(storeName, "readonly");
     return wrapRequest(store.getAll());
@@ -68,6 +110,7 @@ export const DB = {
   },
 
   async put(storeName, value) {
+    if (storeName === "dutyEntries" && value.isDraft !== true) return saveWithLocoMaster([value], value);
     const store = await tx(storeName, "readwrite");
     return wrapRequest(store.put(value));
   },
