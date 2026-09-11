@@ -148,11 +148,13 @@ function actionButton(label, kind, onclick, tone = "") {
   }, [actionIcon(kind), el("span", { class: "icon-action-label" }, label)]);
 }
 
+const LOCO_RECALL_FIELDS = ["locomotivePTType","srMake","srMakeOther","hogMake","hogMakeOther","burMake","burMakeOther","acFitted","acStatus","rtisFitted","rtisStatus","uicStatus","uicCableConnected","uicCableOption"];
+
 function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
   const history = new Map();
   const legacyById = new Map(locomotives.map((loco) => [loco.id, loco]));
   const newestFirst = entries
-    .filter((candidate) => candidate.id !== currentEntryId)
+    .filter((candidate) => candidate.id !== currentEntryId && candidate.isDraft !== true)
     .sort((a, b) => (b.lastModified || "").localeCompare(a.lastModified || "") || (b.date || "").localeCompare(a.date || ""));
 
   for (const candidate of newestFirst) {
@@ -162,6 +164,7 @@ function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
         number: candidate.locomotiveNumberSnapshot || (legacy && legacy.number),
         type: candidate.locomotiveType || (legacy && legacy.locoClass),
         shed: candidate.locomotiveShed || (legacy && legacy.shed),
+        details: Object.fromEntries(LOCO_RECALL_FIELDS.filter(key => candidate[key] !== undefined && candidate[key] !== null).map(key => [key, candidate[key]])),
       },
       ...(candidate.additionalLocomotives || []).map((loco) => ({
         number: loco.locomotiveNumberSnapshot,
@@ -175,7 +178,7 @@ function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
       if (!number || history.has(number)) continue;
       const type = canonicalLocomotiveType(locomotive.type);
       const shed = sanitizeShedCode(locomotive.shed);
-      if (type || shed) history.set(number, { type, shed });
+      if (type || shed || Object.keys(locomotive.details || {}).length) history.set(number, { type, shed, details:locomotive.details || {} });
     }
   }
 
@@ -1066,7 +1069,8 @@ async function showForm(container, setHeaderTitle, entryId) {
   const locomotiveRow = el("div", { class: "form-row locomotive-row" });
   locomotiveRow.appendChild(fieldLabel("Locomotive", { class: "locomotive-heading" }));
 
-  const recallNote = el("div", { class: "loco-recall-note hidden" }, "Previous details found — type and shed filled.");
+  const recallNote = el("div", { class: "loco-recall-note hidden" }, "Last saved loco details filled — all fields can be edited.");
+  const recallRefreshers = [];
   const typeSelect = el("select", { "aria-label": "Locomotive type" });
   typeSelect.appendChild(el("option", { value: "", disabled: "" }, "Select"));
   for (const type of LOCOMOTIVE_TYPE_OPTIONS) typeSelect.appendChild(el("option", { value: type }, type));
@@ -1113,6 +1117,12 @@ async function showForm(container, setHeaderTitle, entryId) {
       if (remembered) {
         entry.locomotiveType = remembered.type;
         entry.locomotiveShed = remembered.shed;
+        Object.assign(entry, remembered.details || {});
+        entry.uicStatus = uicDisplayStatus(entry);
+        ptTypeSelect.value = entry.locomotivePTType;
+        recallRefreshers.forEach(refresh => refresh());
+        renderHogDependentFields();
+        renderFittedStatusFields();
         shedInput.value = remembered.shed;
         renderTypeControl();
         recallNote.classList.remove("hidden");
@@ -1471,6 +1481,11 @@ async function showForm(container, setHeaderTitle, entryId) {
       if (onSelect) onSelect(value);
       onFieldChange();
     }, { "aria-label": label });
+    recallRefreshers.push(() => {
+      select.value = entry[fieldKey];
+      manualInput.value = entry[otherFieldKey] || "";
+      renderManualInput();
+    });
     renderManualInput();
 
     return el("div", { class: "schedule-field component-field" }, [
@@ -1531,13 +1546,15 @@ async function showForm(container, setHeaderTitle, entryId) {
   renderHogDependentFields();
 
   function createComponentDropdownField(label, fieldKey, options, onSelect) {
+    const select = createDropdown(options, entry[fieldKey], (value) => {
+      entry[fieldKey] = value;
+      if (onSelect) onSelect(value);
+      onFieldChange();
+    }, { "aria-label": label });
+    recallRefreshers.push(() => { select.value = entry[fieldKey]; });
     return el("div", { class: "schedule-field component-field" }, [
       fieldLabel(label),
-      createDropdown(options, entry[fieldKey], (value) => {
-        entry[fieldKey] = value;
-        if (onSelect) onSelect(value);
-        onFieldChange();
-      }, { "aria-label": label }),
+      select,
     ]);
   }
 
