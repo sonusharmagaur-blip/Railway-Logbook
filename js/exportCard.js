@@ -1,5 +1,5 @@
 import { DB } from "./db.js";
-import { UICStatus, kmFieldLabel } from "./models.js";
+import { UICStatus, kmFieldLabel, uicDisplayStatus } from "./models.js";
 import { el, formatDate, formatTime } from "./util.js";
 import { APP_LOGO } from "./shareLogo.js";
 
@@ -28,6 +28,15 @@ function longDate(value) {
 }
 function clean(value) { return String(value || "").trim(); }
 function item(label, value) { return { label, value: val(value) }; }
+function atPlace(value, place) { return time(value) + (clean(place) ? " @ " + clean(place) : ""); }
+function volts(value) { return clean(value) ? clean(value).replace(/\s*(volts|v)$/i, "") + " Volts" : "—"; }
+function spareSummary(entry) {
+  const items = entry.spareItems || {};
+  const labels = {bp:"BP",fp:"FP",sc:"SC",tsc:"TSC",fourWw:"4WW",fireExt:"2+2 Fire Ext.",ptFuse:"2 PT-Fuse"};
+  const selected = Object.entries(labels).filter(([key]) => items[key] === true).map(([,label]) => label);
+  if (items.other && clean(items.otherText)) selected.push(clean(items.otherText));
+  return selected.join(", ");
+}
 function rowIf(items) { return items.filter(({ value, always, pairKey }) => always || value !== "—" || pairKey && items.some(f => f.pairKey === pairKey && f.value !== "—")); }
 
 function majorScheduleOverdue(value, movementDate) {
@@ -60,13 +69,13 @@ function detailSections(entry, locomotives) {
     item("BUR Make", entry.burMake === "Other" ? entry.burMakeOther : entry.burMake),
     item("HOG Make", entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake),
     item("HOG Status", entry.hogStatus),
-    item("UIC", entry.uicStatus === UICStatus.MODIFIED ? `Modified · ${val(entry.uicCableOption)}` : entry.uicStatus),
-    item("UIC Cable", entry.uicCableConnected),
+    item("UIC Status", uicDisplayStatus(entry)),
     item("RTIS", entry.rtisFitted === "Not Fitted" ? "Not Fitted" : entry.rtisStatus),
     item("AC", entry.acFitted === "Not Fitted" ? "Not Fitted" : entry.acStatus),
     item("Kavach Make", entry.kavachMake), item("Kavach Status", entry.kavachStatus),
     item("Brake System", entry.brakeSystem), item("SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake),
-    item("MC %", entry.mcStatus), item("UBA DJ Open", entry.ubaDjOpen), item("UBA DJ Closed", entry.ubaDjClosed),
+    item("MC %", entry.mcStatus), item("UBA DJ Open", volts(entry.ubaDjOpen)), item("UBA DJ Closed", volts(entry.ubaDjClosed)),
+    {...item("Spare Items", spareSummary(entry)), fullWidth:true},
   ];
   for (const field of components) {
     if (["SPM Make", "MC %"].includes(field.label)) field.pairKey = "spm";
@@ -98,11 +107,11 @@ function detailSections(entry, locomotives) {
     item("Loco Takeover", time(entry.locoTakeoverTime)), item("Takeover Place", entry.locoTakeoverPlace), item("Checked Upto", time(entry.locoCheckedUptoTime)),
     item("Loco Offer", time(entry.locoOfferTime)), item("Offer Place", offerPlace), item("Offer Dep Time", time(entry.locoOfferDepartureTime)),
     item("Engine On Train", time(entry.engineOnTrainTime)), item("EOT Place", entry.engineOnTrainPlace),
-    item("HOG Attached From", time(entry.hogAttachedTime)), item("HOG Attached To", time(entry.hogAttachedToTime)), item("HOG Place", entry.hogAttachedPlace),
-    item("BP/FP Buildup", time(entry.bpFpTime)), item("BP/FP Place", entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace),
+    item("HOG Attached From", atPlace(entry.hogAttachedTime, entry.hogAttachedPlace)), item("HOG Attached To", atPlace(entry.hogAttachedToTime, entry.hogAttachedPlace)),
+    item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)),
     item("Yard Dep", time(entry.departureTime)), item("Yard Signal", entry.yardSignal),
     item("Placement Time", time(entry.placementTime)), item("PF No.", entry.placementPfNumber),
-    item("Continuity Time", time(entry.continuityTime)), {...item("BPC Time", time(entry.bpcTime)), always:true},
+    {...item("Continuity Time", time(entry.continuityTime)), pairKey:"continuity", always:true}, {...item("BPC Time", time(entry.bpcTime)), pairKey:"continuity", always:true},
     item("Made Over Charge", entry.madeOverChargeName), item("HQ", entry.madeOverChargeHQ), item("Made Over Time", time(entry.madeOverChargeTime)),
     {...item("Departure Time", time(entry.finalDepartureTime)), always:true},
   ];
@@ -116,6 +125,12 @@ function detailSections(entry, locomotives) {
     ...(entry.privateNumberDetails || []).flatMap((p,i) => Object.entries(p).filter(([k,v]) => !["id","isComplete"].includes(k) && v !== "" && v != null).map(([k,v]) => item("PN " + (i+1) + " · " + k.replace(/([A-Z])/g," $1"), /Time$/.test(k) ? time(v) : v))),
     ...["privateNumber","yardMasterName","pmName"].filter(k=>entry[k]).map(k=>item(k.replace(/([A-Z])/g," $1"),entry[k])),
   ];
+  if (entry.movementType === "departure" || isDot) {
+    trainRows.forEach(f => {
+      if (["Train Number","Train Name","Arrival Train","Departure Train","Arrival Train Name","Departure Train Name"].includes(f.label)) f.inHeader = true;
+    });
+  }
+  [...extra, ...privateNumbers].forEach(f => { f.fullWidth = true; });
   const sections = [
     { title:"Movement Identity", rows: trainRows },
     { title:"Loco Components", rows: components },
@@ -151,11 +166,15 @@ function wrap(ctx, text, width) {
 function paginate(sections) { return [sections]; }
 function prepareDiary(ctx, groups) {
   return groups.map(group => {
-    const fields = group.rows.filter(f => group.title !== "Movement Identity" || !["Date","Movement","Loco Number","Loco Type","Shed"].includes(f.label));
+    const fields = group.rows.filter(f => !f.inHeader && (group.title !== "Movement Identity" || !["Date","Movement","Loco Number","Loco Type","Shed"].includes(f.label)));
     const rows = [];
     const pairs = [];
     let pending = [];
     for (const f of fields) {
+      if (f.fullWidth) {
+        if (pending.length) { pairs.push(pending); pending = []; }
+        pairs.push([f]); continue;
+      }
       if (pending.length && (pending[0].pairKey || f.pairKey) && pending[0].pairKey !== f.pairKey) {
         pairs.push(pending); pending = [];
       }
@@ -169,8 +188,8 @@ function prepareDiary(ctx, groups) {
         ctx.font = `700 8.5px ${FONT}`;
         const labels = wrap(ctx, f.label.toUpperCase(), stacked ? 217 : 94);
         ctx.font = `700 11px ${FONT}`;
-        const values = stacked ? [f.value] : wrap(ctx, f.value, 117);
-        return { labels, values, stacked, alert:f.alert };
+        const values = stacked ? [f.value] : wrap(ctx, f.value, f.fullWidth ? 362 : 117);
+        return { labels, values, stacked, alert:f.alert, fullWidth:f.fullWidth };
       });
       rows.push({pair, height:Math.max(25,...pair.map(f=>f.stacked ? 38 : Math.max(f.labels.length*10,f.values.length*13)+9))});
     }
@@ -180,7 +199,12 @@ function prepareDiary(ctx, groups) {
 function drawPage(canvas, groups, entry, profile, logo) {
   const ctx = canvas.getContext("2d");
   const layout = prepareDiary(ctx, groups);
-  const height = Math.max(CARD_HEIGHT,180 + layout.reduce((n,g)=>n+30+g.rows.reduce((v,r)=>v+r.height,0),0)+52);
+  const headerTrains = entry.movementType === "departure" ? [`${val(entry.trainNumber)} · ${val(entry.trainName)}`] :
+    entry.movementType === "arrival" && entry.isDotTrain ? [`ARRIVAL: ${val(entry.trainNumber)} · ${val(entry.trainName)}`, `DEP: ${val(entry.dotTrainNumber)} · ${val(entry.dotTrainName)}`] : [];
+  ctx.font = `800 14px ${FONT}`;
+  const trainLines = headerTrains.flatMap(text => wrap(ctx,text,462));
+  const trainHeight = trainLines.length ? trainLines.length*18+12 : 0;
+  const height = Math.max(CARD_HEIGHT,180 + trainHeight + layout.reduce((n,g)=>n+30+g.rows.reduce((v,r)=>v+r.height,0),0)+52);
   canvas.width=CARD_WIDTH*SCALE; canvas.height=Math.ceil(height*SCALE); ctx.scale(SCALE,SCALE);
   ctx.fillStyle=paper; rounded(ctx,0,0,CARD_WIDTH,height,22); ctx.fill();
   ctx.fillStyle="#f7ecd4"; ctx.fillRect(0,0,32,height);
@@ -197,14 +221,16 @@ function drawPage(canvas, groups, entry, profile, logo) {
   // Prominent locomotive identity; use resolved values from the existing field builder.
   const identity=groups.find(g=>g.title==="Movement Identity")?.rows||[];
   const field=name=>identity.find(f=>f.label===name)?.value||"—";
-  ctx.fillStyle=maroon;rounded(ctx,48,82,465,76,10);ctx.fill();
+  ctx.fillStyle=ink;ctx.font=`800 14px ${FONT}`;
+  trainLines.forEach((line,i)=>ctx.fillText(line,50,89+i*18,462));
+  ctx.fillStyle=maroon;rounded(ctx,48,82+trainHeight,465,76,10);ctx.fill();
   const blocks=[["LOCO NUMBER",field("Loco Number")],["TYPE",field("Loco Type")],["SHED",field("Shed")]];
   blocks.forEach(([label,value],i)=>{
     const x=62+i*153;
-    ctx.fillStyle="#ffdc98";ctx.font=`700 9px ${FONT}`;ctx.fillText(label,x,102);
-    ctx.fillStyle="#fffaf0";ctx.font=`800 23px ${FONT}`;ctx.fillText(value,x,137,136);
+    ctx.fillStyle="#ffdc98";ctx.font=`700 9px ${FONT}`;ctx.fillText(label,x,102+trainHeight);
+    ctx.fillStyle="#fffaf0";ctx.font=`800 23px ${FONT}`;ctx.fillText(value,x,137+trainHeight,136);
   });
-  let y=180;
+  let y=180+trainHeight;
   for(const group of layout) {
     ctx.fillStyle=maroon;ctx.font=`800 11px ${FONT}`;ctx.fillText(group.title.toUpperCase(),50,y);
     ctx.strokeStyle="#cbb79b";ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(50,y+7);ctx.lineTo(512,y+7);ctx.stroke();y+=23;
@@ -212,7 +238,7 @@ function drawPage(canvas, groups, entry, profile, logo) {
       row.pair.forEach((f,index)=>{
         const x=50+index*236;
         ctx.fillStyle="#71594b";ctx.font=`700 8.5px ${FONT}`;f.labels.forEach((line,i)=>ctx.fillText(line,x,y+i*10));
-        ctx.fillStyle=f.alert ? "#c01620" : ink;ctx.font=`700 11px ${FONT}`;f.values.forEach((line,i)=>ctx.fillText(line,f.stacked ? x : x+100,y+(f.stacked ? 16 : 0)+i*13,f.stacked ? 217 : 117));
+        ctx.fillStyle=f.alert ? "#c01620" : ink;ctx.font=`700 11px ${FONT}`;f.values.forEach((line,i)=>ctx.fillText(line,f.stacked ? x : x+100,y+(f.stacked ? 16 : 0)+i*13,f.stacked ? 217 : f.fullWidth ? 362 : 117));
       });
       ctx.strokeStyle="rgba(170,143,109,.20)";ctx.beginPath();ctx.moveTo(50,y+row.height-11);ctx.lineTo(512,y+row.height-11);ctx.stroke();
       y+=row.height;
