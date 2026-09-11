@@ -1,407 +1,188 @@
 import { DB } from "./db.js";
-import { kmFieldLabel } from "./models.js";
-import { UICStatus } from "./models.js";
+import { UICStatus, kmFieldLabel } from "./models.js";
 import { el, formatDate, formatTime } from "./util.js";
+import { APP_LOGO } from "./shareLogo.js";
 
-// 540 × 675 logical pixels at 2x produces an exact 1080 × 1350 (4:5) image.
+
+
+
+
 const SCALE = 2;
 const CARD_WIDTH = 540;
 const CARD_HEIGHT = 675;
-import { SHARE_PHOTO } from "./sharePhoto.js";
-const BACKGROUND_URL = SHARE_PHOTO;
-const FONT_STACK = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Avenir Next", "Segoe UI", sans-serif';
+const FONT = 'Arial, sans-serif';
+const paper = "#fffaf0";
+const ink = "#3d1f1c";
+const maroon = "#7b1f1b";
+const gold = "#c99128";
 
-const COLORS = {
-  fallbackBg: "#07131f",
-  headerText: "#fff9ed",
-  accent: "#f4a33b",
-  label: "#ffd497",
-  value: "#ffffff",
-  panel: "rgba(5, 18, 29, 0.76)",
-  panelBorder: "rgba(255, 215, 158, 0.52)",
-};
-
-function wrapText(ctx, text, maxWidth) {
-  const words = String(text).split(" ");
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const test = line ? line + " " + word : word;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = test;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
+function val(value, fallback = "—") {
+  return value === undefined || value === null || value === "" ? fallback : String(value);
 }
-
-function formatLongDate(isoDateStr) {
-  if (!isoDateStr) return "—";
-  const date = new Date(isoDateStr + "T00:00:00");
-  if (isNaN(date)) return isoDateStr;
-  const weekday = date.toLocaleDateString("en-GB", { weekday: "long" });
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = date.toLocaleDateString("en-GB", { month: "long" });
-  return `${weekday}, ${day} ${month} ${date.getFullYear()}`;
+function time(value) { return value ? formatTime(value) : "—"; }
+function date(value) { return value ? formatDate(value) : "—"; }
+function longDate(value) {
+  if (!value) return "—";
+  const parsed = new Date(value + "T00:00:00");
+  return Number.isNaN(parsed) ? value : parsed.toLocaleDateString("en-GB", { weekday:"long", day:"2-digit", month:"long", year:"numeric" });
 }
+function clean(value) { return String(value || "").trim(); }
+function item(label, value) { return { label, value: val(value) }; }
+function rowIf(items) { return items.filter(({ value }) => value !== "—"); }
 
-function buildFields(entry, locomotives, profile) {
-  const loco = locomotives.find((l) => l.id === entry.locomotiveId);
-  const locoNumber = (loco && loco.number) || entry.locomotiveNumberSnapshot || "—";
-  const locoType = entry.locomotiveType || (loco && loco.locoClass) || "—";
-  const locoShed = entry.locomotiveShed || (loco && loco.shed) || "—";
-  const locoSummary = `${locoNumber}   ·   ${locoType}   ·   ${locoShed}`;
-
-  if (entry.movementType === "shed_shunting") {
-    return [
-      { label: "Loco Number · Type · Shed", value: locoSummary, fullWidth: true },
-      { label: "TOC Time", value: entry.shuntingTocTime ? formatTime(entry.shuntingTocTime) : "—" },
-      { label: "TOC Place", value: entry.shuntingTocPlace || "—" },
-      { label: "Movement Upto", value: entry.shuntingMovementUpto || "—" },
-      { label: "Stable Time", value: entry.shuntingStableTime ? formatTime(entry.shuntingStableTime) : "—" },
-      { label: "Stable Place", value: entry.shuntingStablePlace || "—" },
-      { label: "CC Name", value: entry.shuntingCCName || "—" },
-    ];
-  }
-
-  let uicValue = entry.uicStatus || "—";
-  if (entry.uicStatus === UICStatus.MODIFIED && entry.uicCableOption) {
-    uicValue += ` (${entry.uicCableOption})`;
-  }
-
-  const isDot = entry.movementType === "arrival" && entry.isDotTrain === true;
-  const offerPlace = entry.locoOfferPlace === "Other"
-    ? entry.locoOfferPlaceOther
-    : entry.locoOfferPlace;
-  const dotOffer = /DOT/i.test(offerPlace || "") ? offerPlace : "";
-  const fields = [
-    {
-      label: isDot ? "Arrival Train → Departure Train" : "Train Number · Name",
-      value: isDot ? `${entry.trainNumber || "—"} → ${entry.dotTrainNumber || "—"}${entry.dotTrainName ? " · " + entry.dotTrainName : ""}` : `${entry.trainNumber || "—"}${entry.trainName ? " — " + entry.trainName : ""}`,
-      fullWidth: !dotOffer,
-    },
+function detailSections(entry, locomotives) {
+  const loco = locomotives.find((item) => item.id === entry.locomotiveId);
+  const locoNumber = entry.locomotiveNumberSnapshot || loco?.number;
+  const locoType = entry.locomotiveType || loco?.locoClass;
+  const locoShed = entry.locomotiveShed || loco?.shed;
+  const isDot = entry.movementType === "arrival" && entry.isDotTrain;
+  const offerPlace = entry.locoOfferPlace === "Other" ? entry.locoOfferPlaceOther : entry.locoOfferPlace;
+  const trainRows = [
+    item("Date", longDate(entry.date)),
+    item("Movement", isDot ? "Departure Movement · DOT" : entry.movementType === "arrival" ? "Arrival Movement" : entry.movementType === "shed_shunting" ? "Shed Shunting" : "Departure Movement"),
+    item(isDot ? "Arrival Train" : "Train Number", entry.trainNumber),
+    item(isDot ? "Departure Train" : "Train Name", isDot ? entry.dotTrainNumber : entry.trainName),
+    ...(isDot ? [item("Arrival Train Name", entry.trainName), item("Departure Train Name", entry.dotTrainName)] : []),
+    item("Loco Number", locoNumber), item("Loco Type", locoType), item("Shed", locoShed),
+    item("Working Cab", entry.cabSelection), item("PT Type", entry.locomotivePTType),
   ];
-  if (dotOffer) fields.push({ label: "Loco Offer Place", value: dotOffer });
-  fields.push(
-    { label: "Loco Number · Type · Shed", value: locoSummary, fullWidth: true },
-    { label: "PT Type", value: entry.locomotivePTType || "—" },
-    { label: "Working Cab", value: entry.cabSelection || "—" },
-    { label: "AC", value: entry.acFitted === "Not Fitted" ? "Not Fitted" : (entry.acStatus || "—") },
-    { label: "UIC", value: uicValue },
-    { label: "RTIS", value: entry.rtisFitted === "Not Fitted" ? "Not Fitted" : (entry.rtisStatus || "—") },
-    { label: "Major Schedule", value: `${entry.majorScheduleTypeCode || "—"}${entry.majorScheduleDate ? " — " + formatDate(entry.majorScheduleDate) : ""}` },
-    { label: "Minor Schedule / TI", value: entry.minorScheduleTIDate ? formatDate(entry.minorScheduleTIDate) : "Not available" },
-    { label: kmFieldLabel(entry), value: entry.kmSinceLastSchedule != null ? String(entry.kmSinceLastSchedule) : "—" },
-  );
-  return fields;
+  const components = [
+    item("SR Make", entry.srMake === "Other" ? entry.srMakeOther : entry.srMake),
+    item("BUR Make", entry.burMake === "Other" ? entry.burMakeOther : entry.burMake),
+    item("HOG Make", entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake),
+    item("HOG Status", entry.hogStatus),
+    item("UIC", entry.uicStatus === UICStatus.MODIFIED ? `Modified · ${val(entry.uicCableOption)}` : entry.uicStatus),
+    item("UIC Cable", entry.uicCableConnected),
+    item("RTIS", entry.rtisFitted === "Not Fitted" ? "Not Fitted" : entry.rtisStatus),
+    item("AC", entry.acFitted === "Not Fitted" ? "Not Fitted" : entry.acStatus),
+    item("Kavach Make", entry.kavachMake), item("Kavach Status", entry.kavachStatus),
+    item("Brake System", entry.brakeSystem), item("SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake),
+    item("MC Status", entry.mcStatus), item("UBA DJ Open", entry.ubaDjOpen), item("UBA DJ Closed", entry.ubaDjClosed),
+  ];
+  const schedules = [
+    item("Major Schedule", `${val(entry.majorScheduleTypeCode)} · ${date(entry.majorScheduleDate)}`),
+    item("Minor / TI Date", date(entry.minorScheduleTIDate)),
+    item(kmFieldLabel(entry), entry.kmSinceLastSchedule),
+    ...((entry.minorSchedules || []).map((schedule, index) => item(`Minor Schedule ${index + 1}`, `${val(schedule.type)} · ${date(schedule.date)} · ${val(schedule.km)} KM`))),
+  ];
+  const arrival = [
+    item("Arrival Time", time(entry.arrivalTime)), item("Arrival At", entry.arrivalAt),
+    item("HOG Time From", time(entry.arrivalHogFromTime)), item("HOG Time To", time(entry.arrivalHogToTime)),
+    item("Take Over From", entry.arrivalTakeoverFrom), item("Take Over Time", time(entry.arrivalTakeoverTime)),
+    item("Arrival Departure Time", time(entry.arrivalDepartureTime)), item("Arrival Signal", entry.arrivalSignalNumber),
+    item("Placed Time", time(entry.arrivalPlacedTime)), item("Place", entry.arrivalPlace),
+    item("Detach Time", time(entry.arrivalDetachTime)), item("PM Name", entry.arrivalPmName),
+    item("Dep Yard Time", time(entry.arrivalYardDepartureTime)), item("Dep Yard Signal", entry.arrivalYardSignal),
+    item("Shed Arrival Time", time(entry.arrivalShedArrivalTime)), item("Line No.", entry.arrivalLineNumber),
+  ];
+  const departure = [
+    item("Loco Takeover", time(entry.locoTakeoverTime)), item("Takeover Place", entry.locoTakeoverPlace), item("Checked Upto", time(entry.locoCheckedUptoTime)),
+    item("Loco Offer", time(entry.locoOfferTime)), item("Offer Place", offerPlace), item("Offer Dep Time", time(entry.locoOfferDepartureTime)),
+    item("Engine On Train", time(entry.engineOnTrainTime)), item("EOT Place", entry.engineOnTrainPlace),
+    item("HOG Attached From", time(entry.hogAttachedTime)), item("HOG Attached To", time(entry.hogAttachedToTime)), item("HOG Place", entry.hogAttachedPlace),
+    item("BP/FP Buildup", time(entry.bpFpTime)), item("BP/FP Place", entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace),
+    item("Yard Dep", time(entry.departureTime)), item("Yard Signal", entry.yardSignal),
+    item("Placement Time", time(entry.placementTime)), item("PF No.", entry.placementPfNumber),
+    item("Continuity Time", time(entry.continuityTime)), item("BPC Time", time(entry.bpcTime)),
+    item("Made Over Charge", entry.madeOverChargeName), item("HQ", entry.madeOverChargeHQ), item("Made Over Time", time(entry.madeOverChargeTime)),
+    item("Final Dep Time", time(entry.finalDepartureTime)),
+  ];
+  const officials = (entry.officialDetails || []).map((official, index) => item(`Official ${index + 1}`, `${val(official.designation)} · ${val(official.name)}`));
+  const additional = (entry.additionalLocomotives || []).map((loco, index) => item(`Additional Loco ${index + 1}`, `${val(loco.locomotiveNumberSnapshot)} · ${val(loco.locomotiveType)} · ${val(loco.locomotiveShed)} · ${val(loco.cabSelection)} · ${val(loco.ptType)}`));
+  const extra = [
+    item("Repair List", entry.repairList), item("Remarks", entry.remarks),
+    ...officials, ...additional,
+    ...Object.entries(entry.spareItems || {}).filter(([k,v]) => k !== "otherText" && v === true).map(([k]) => item("Spare Item", ({bp:"BP",fp:"FP",sc:"SC",tsc:"TSC",fourWw:"4WW",fireExt:"2+2 FIRE EXTINGUISHERS",ptFuse:"2 PT FUSE",other:entry.spareItems.otherText || "OTHER"})[k] || k)),
+    ...(entry.privateNumberDetails || []).flatMap((p,i) => Object.entries(p).filter(([k,v]) => !["id","isComplete"].includes(k) && v !== "" && v != null).map(([k,v]) => item("PN " + (i+1) + " · " + k.replace(/([A-Z])/g," $1"), /Time$/.test(k) ? time(v) : v))),
+    ...["privateNumber","yardMasterName","pmName"].filter(k=>entry[k]).map(k=>item(k.replace(/([A-Z])/g," $1"),entry[k])),
+  ];
+  const sections = [
+    { title:"Movement Identity", rows: trainRows },
+    { title:"Loco Components", rows: components },
+    { title:"Schedule Details", rows: schedules },
+    ...(entry.movementType === "arrival" ? [{ title:"Arrival Details", rows: arrival }] : []),
+    ...((entry.movementType === "departure" || isDot) ? [{ title:"Departure Details", rows: departure }] : []),
+    ...(entry.movementType === "shed_shunting" ? [{title:"Shed Shunting",rows:[item("TOC Time",time(entry.shuntingTocTime)),item("TOC Place",entry.shuntingTocPlace),item("Movement Upto",entry.shuntingMovementUpto),item("Stable Time",time(entry.shuntingStableTime)),item("Stable Place",entry.shuntingStablePlace),item("CC Name",entry.shuntingCCName)]}] : []),
+    { title:"Other Details", rows: extra },
+  ];
+  return sections.map(({ title, rows }) => ({ title, rows: rowIf(rows) })).filter(({ rows }) => rows.length);
 }
 
-function drawDynamicLocoIdentity(ctx, entry) {
-  const locoNumber = String(entry.locomotiveNumberSnapshot || "").trim();
-  const locoShed = String(entry.locomotiveShed || "").trim().toUpperCase();
-  const rawType = String(entry.locomotiveType || "").trim().toUpperCase().replace(/\s+/g, "");
-  const typeLabels = {
-    WAP5: "WAP-5",
-    WAP7: "WAP-7",
-    WAG9: "WAG-9",
-    WAP4: "WAP-4",
-    WAG12: "WAG-12",
-    DSLLOCO: "DSL",
-  };
-  const locoType = typeLabels[rawType] || String(entry.locomotiveType || "").trim().toUpperCase();
-  if (!locoNumber && !locoShed && !locoType) return;
-
-  ctx.save();
-  ctx.fillStyle = "rgba(18, 18, 17, 0.92)";
-  ctx.strokeStyle = "rgba(245, 241, 226, 0.14)";
-  ctx.lineWidth = 0.45;
-  ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(255, 255, 255, 0.16)";
-  ctx.shadowBlur = 0.7;
-
-  // Front markings: positioned and weighted like the locomotive's original lettering.
-  ctx.textAlign = "center";
-  ctx.font = `900 10px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-  if (locoType) {
-    ctx.fillText(locoType, 70, 374);
-    ctx.strokeText(locoType, 70, 374);
-  }
-  if (locoShed) {
-    ctx.font = `900 9px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-    ctx.fillText(locoShed, 116, 374);
-    ctx.strokeText(locoShed, 116, 374);
-  }
-  if (locoNumber) {
-    ctx.font = `900 10px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-    ctx.fillText(locoNumber, 162, 374);
-    ctx.strokeText(locoNumber, 162, 374);
-  }
-
-  // The side carries only the locomotive number, aligned on the white panel above the red stripe.
-  ctx.translate(342, 342);
-  ctx.rotate(0.035);
-  ctx.scale(0.58, 1);
-  ctx.font = `900 11px "Arial Narrow", "Roboto Condensed", ${FONT_STACK}`;
-  if (locoNumber) {
-    ctx.fillText(locoNumber, 0, 0);
-    ctx.strokeText(locoNumber, 0, 0);
-  }
-  ctx.restore();
+function rounded(ctx, x, y, width, height, radius) {
+  ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.closePath();
 }
-
-function loadImage(src) {
-  return new Promise((resolve) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
-    image.src = src;
-  });
-}
-
-function drawCard(canvas, fields, backgroundImage, lpsName, entry) {
-  const cellPadding = 6;
-  const labelSize = 9;
-  const valueSize = 13;
-  const valueLineHeight = 16;
-  const headerHeight = 80;
-  const bodyInset = 12;
-  const cellGap = 6;
-  const ctx = canvas.getContext("2d");
-
-  // Compact two-column cards keep the exported image close to a phone-screen portrait.
-  const rows = [];
-  let pendingField = null;
-  for (const field of fields) {
-    if (field.fullWidth) {
-      if (pendingField) rows.push([pendingField]);
-      pendingField = null;
-      rows.push([field]);
-    } else if (pendingField) {
-      rows.push([pendingField, field]);
-      pendingField = null;
-    } else {
-      pendingField = field;
+function wrap(ctx, text, width) {
+  const words = String(text).split(/\s+/); const lines = []; let line = "";
+  for (let word of words) {
+    while (ctx.measureText(word).width > width) {
+      if (line) { lines.push(line); line = ""; }
+      let count = 1;
+      while (count < word.length && ctx.measureText(word.slice(0,count+1)).width <= width) count++;
+      lines.push(word.slice(0,count)); word = word.slice(count);
     }
+    const test = line ? line + " " + word : word;
+    if (ctx.measureText(test).width > width && line) { lines.push(line); line = word; } else line = test;
   }
-  if (pendingField) rows.push([pendingField]);
-
-  const measureCanvas = document.createElement("canvas");
-  const mctx = measureCanvas.getContext("2d");
-  mctx.font = `700 ${valueSize}px ${FONT_STACK}`;
-  const innerWidth = CARD_WIDTH - bodyInset * 2;
-  const columnWidth = (innerWidth - cellGap) / 2;
-  const rowHeights = rows.map((row) => {
-    const cellWidth = row.length === 1 ? innerWidth : columnWidth;
-    return Math.max(...row.map((field) => {
-      const lines = wrapText(mctx, field.value, cellWidth - cellPadding * 2);
-      return cellPadding * 2 + labelSize + 6 + lines.length * valueLineHeight;
-    }));
-  });
-  const firstBottomRow = rows.findIndex((row) => row.some((field) => field.label === "AC" || field.label === "UIC"));
-  const topRowCount = firstBottomRow >= 0 ? firstBottomRow : Math.min(4, rows.length);
-  const bottomRowCount = Math.max(0, rows.length - topRowCount);
-  const topRowsHeight = rowHeights.slice(0, topRowCount).reduce((a, b) => a + b, 0)
-    + Math.max(0, topRowCount - 1) * cellGap;
-  const bottomRowsHeight = rowHeights.slice(topRowCount).reduce((a, b) => a + b, 0)
-    + Math.max(0, bottomRowCount - 1) * cellGap;
-  const totalHeight = CARD_HEIGHT;
-
-  canvas.width = CARD_WIDTH * SCALE;
-  canvas.height = totalHeight * SCALE;
-  canvas.style.width = CARD_WIDTH + "px";
-  canvas.style.height = totalHeight + "px";
-  ctx.scale(SCALE, SCALE);
-
-  // Crop the original portrait uniformly; never squash the locomotive.
-  // Identity lettering uses the same transform as the new 540 × 675 artwork.
-  ctx.fillStyle = COLORS.fallbackBg;
-  roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
-  ctx.fill();
-
-  if (backgroundImage) {
-    ctx.save();
-    roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
-    ctx.clip();
-    const photoScale = Math.max(CARD_WIDTH / 540, totalHeight / 675);
-    ctx.translate((CARD_WIDTH - 540 * photoScale) / 2, (totalHeight - 675 * photoScale) / 2);
-    ctx.scale(photoScale, photoScale);
-    ctx.drawImage(backgroundImage, 0, 0, 540, 675);
-    drawDynamicLocoIdentity(ctx, entry);
-    ctx.restore();
+  if (line) lines.push(line); return lines;
+}
+function pageHeight(groups, ctx) {
+  ctx.font = `700 11px ${FONT}`;
+  return Math.max(CARD_HEIGHT, 101 + groups.reduce((sum,g)=>sum+34+g.rows.reduce((n,f)=>n+Math.max(22,wrap(ctx,f.value,320).length*13+5,wrap(ctx,f.label.toUpperCase(),120).length*11+5),0),0)+55);
+}
+function paginate(sections) { return [sections]; }
+function drawLogoWatermark(ctx, logo) {
+  if (!logo) return;
+  ctx.save(); ctx.globalAlpha = .10;
+  ctx.drawImage(logo, 118, ctx.canvas.height / SCALE / 2 - 152, 304, 304); ctx.restore();
+}
+function drawPage(canvas, groups, entry, profile, logo, pageNumber, totalPages) {
+  const ctx = canvas.getContext("2d");
+  const height = pageHeight(groups, ctx); canvas.width = CARD_WIDTH * SCALE; canvas.height = height * SCALE; ctx.scale(SCALE, SCALE);
+  ctx.fillStyle = paper; rounded(ctx, 0, 0, CARD_WIDTH, height, 22); ctx.fill();
+  ctx.fillStyle = "#f7ecd4"; ctx.fillRect(0, 0, 32, height);
+  ctx.strokeStyle = "#7c6650"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(31, 0); ctx.lineTo(31, height); ctx.stroke();
+  for (let y = 18; y < height; y += 36) { ctx.fillStyle = "#f9fbfb"; ctx.beginPath(); ctx.arc(31, y, 6, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#ae9b85"; ctx.stroke(); }
+  drawLogoWatermark(ctx, logo);
+  ctx.fillStyle = maroon; ctx.fillRect(49, 26, 7, 54);
+  ctx.fillStyle = ink; ctx.font = `800 20px ${FONT}`; ctx.fillText(entry.movementType === "arrival" && entry.isDotTrain ? "DOT DEPARTURE RECORD" : entry.movementType === "arrival" ? "ARRIVAL MOVEMENT RECORD" : entry.movementType === "shed_shunting" ? "SHED SHUNTING RECORD" : "DEPARTURE MOVEMENT RECORD", 68, 49);
+  ctx.fillStyle = "#755a48"; ctx.font = `700 10px ${FONT}`; ctx.fillText(longDate(entry.date), 68, 70);
+  ctx.fillStyle = "#755a48"; ctx.textAlign = "right"; ctx.fillText("DUTY DIARY", 512, 70); ctx.textAlign = "left";
+  let y = 101;
+  for (const group of groups) {
+    ctx.fillStyle = maroon; ctx.font = `800 12px ${FONT}`; ctx.fillText(group.title.toUpperCase(), 52, y); y += 11;
+    ctx.strokeStyle = "#d3c2a7"; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(52, y); ctx.lineTo(510, y); ctx.stroke(); y += 13;
+    for (const field of group.rows) {
+      ctx.fillStyle = "#6d5447"; ctx.font = `700 9px ${FONT}`; const labels = wrap(ctx, field.label.toUpperCase(), 120); labels.forEach((line,index)=>ctx.fillText(line,52,y+index*11));
+      ctx.fillStyle = ink; ctx.font = `700 11px ${FONT}`;
+      const lines = wrap(ctx, field.value, 320);
+      lines.forEach((line, index) => ctx.fillText(line, 182, y + index * 13));
+      y += Math.max(22, lines.length * 13 + 5, labels.length * 11 + 5);
+    }
+    y += 10;
   }
-
-  // A cinematic shade preserves the photograph while keeping all text readable.
-  ctx.save();
-  roundRect(ctx, 0, 0, CARD_WIDTH, totalHeight, 22);
-  ctx.clip();
-  const shade = ctx.createLinearGradient(0, 0, 0, totalHeight);
-  shade.addColorStop(0, "rgba(2, 10, 18, 0.65)");
-  shade.addColorStop(0.16, "rgba(2, 10, 18, 0.10)");
-  shade.addColorStop(0.56, "rgba(2, 10, 18, 0.04)");
-  shade.addColorStop(1, "rgba(2, 10, 18, 0.72)");
-  ctx.fillStyle = shade;
-  ctx.fillRect(0, 0, CARD_WIDTH, totalHeight);
-  ctx.restore();
-
-  // Premium compact header leaves the sunset and locomotive visible.
-  ctx.fillStyle = COLORS.headerText;
-  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
-  ctx.shadowBlur = 8;
-  ctx.font = `800 23px ${FONT_STACK}`;
-  ctx.textBaseline = "alphabetic";
-  const movementTitle = entry.movementType === "arrival" && entry.isDotTrain ? "Departure Movement · DOT" : entry.movementType === "arrival"
-    ? "Arrival Movement"
-    : entry.movementType === "shed_shunting" ? "Shed Shunting" : "Departure Movement";
-  ctx.fillText(movementTitle, 18, 32);
-  ctx.font = `700 12.5px ${FONT_STACK}`;
-  ctx.fillStyle = "#ffe3ba";
-  ctx.fillText(`LPS Name · ${lpsName}`, 18, 54);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = COLORS.accent;
-  ctx.fillRect(18, 68, 74, 3);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
-  ctx.font = `700 9px ${FONT_STACK}`;
-  ctx.fillText(formatLongDate(entry.date), 103, 72);
-
-  // Split the seven detail rows around the locomotive: four rows at the top
-  // and the remaining rows at the bottom leave a clear portrait window.
-  let topY = headerHeight + bodyInset;
-  let bottomY = Math.max(topY + topRowsHeight + 72, totalHeight - bottomRowsHeight - 20);
-  rows.forEach((row, rowIndex) => {
-    const isTopRow = rowIndex < topRowCount;
-    const y = isTopRow ? topY : bottomY;
-    const rowHeight = rowHeights[rowIndex];
-    const cellWidth = row.length === 1 ? innerWidth : columnWidth;
-    row.forEach((field, columnIndex) => {
-      const x = bodyInset + columnIndex * (columnWidth + cellGap);
-      ctx.fillStyle = COLORS.panel;
-      roundRect(ctx, x, y, cellWidth, rowHeight, 12);
-      ctx.fill();
-      ctx.strokeStyle = COLORS.panelBorder;
-      ctx.lineWidth = 0.9;
-      ctx.stroke();
-
-      const labelY = y + cellPadding + labelSize;
-      ctx.fillStyle = COLORS.label;
-      ctx.font = `700 ${labelSize}px ${FONT_STACK}`;
-      ctx.fillText(field.label.toUpperCase(), x + cellPadding, labelY);
-
-      ctx.fillStyle = COLORS.value;
-      ctx.font = `700 ${valueSize}px ${FONT_STACK}`;
-      const lines = wrapText(ctx, field.value, cellWidth - cellPadding * 2);
-      lines.forEach((line, lineIndex) => {
-        ctx.fillText(line, x + cellPadding, labelY + 5 + (lineIndex + 1) * valueLineHeight);
-      });
-    });
-    if (isTopRow) topY += rowHeight + cellGap;
-    else bottomY += rowHeight + cellGap;
-  });
-
-  ctx.strokeStyle = "rgba(255, 207, 137, 0.88)";
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, 1, 1, CARD_WIDTH - 2, totalHeight - 2, 21);
-  ctx.stroke();
+  ctx.fillStyle = "rgba(123,31,27,.92)"; ctx.fillRect(44, height - 48, 468, 26);
+  ctx.fillStyle = "#fff8ef"; ctx.font = `700 9px ${FONT}`; ctx.fillText("RAILWAY LOGBOOK", 55, height - 31);
+  ctx.textAlign = "right"; ctx.fillText(`LPS NAME · ${clean(profile?.name) || "—"}`, 501, height - 31); ctx.textAlign = "left";
 }
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+function caption(entry) {
+  if (entry.movementType === "arrival" && entry.isDotTrain) return `ARRIVAL TN: ${val(entry.trainNumber)}\nDEP TRAIN NUMBER: ${val(entry.dotTrainNumber)}`;
+  return entry.movementType === "arrival" ? `ARRIVAL TN: ${val(entry.trainNumber)}` : `DEP TRAIN NUMBER: ${val(entry.trainNumber)}`;
 }
-
-function buildShareCaption(entry) {
-  if (entry.movementType === "arrival" && entry.isDotTrain) {
-    return `ARRIVAL TN: ${entry.trainNumber || "—"}\nDEP TRAIN NUMBER: ${entry.dotTrainNumber || "—"}`;
-  }
-  if (entry.movementType === "arrival") return `ARRIVAL TN: ${entry.trainNumber || "—"}`;
-  if (entry.movementType === "shed_shunting") return `SHED SHUNTING · LOCO: ${entry.locomotiveNumberSnapshot || "—"}`;
-  return `DEP TRAIN NUMBER: ${entry.trainNumber || "—"}`;
-}
+function logoImage() { return new Promise((resolve) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => resolve(null); image.src = APP_LOGO; }); }
 
 export async function openExportCard(entry, locomotives, options = {}) {
-  const profile = await DB.get("profile", "singleton");
-  const fields = buildFields(entry, locomotives, profile);
-  const backgroundImage = await loadImage(BACKGROUND_URL);
-  const lpsName = (profile && profile.name) || "Tripurari Sharma";
-
-  const overlay = el("div", { class: "overlay" });
-  const canvasWrap = el("div", { class: "duty-card-canvas-wrap" });
-  const canvas = el("canvas");
-  canvasWrap.appendChild(canvas);
-  drawCard(canvas, fields, backgroundImage, lpsName, entry);
-
-  const caption = buildShareCaption(entry);
-  // Encode before the tap so native sharing retains the user's activation.
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-  if (!blob) throw new Error("Could not create the share image. Please try again.");
-  const filename = `duty-card-${entry.date || "entry"}.png`;
-  const file = new File([blob], filename, { type: "image/png" });
-  const captionInput = el("textarea", {
-    readonly: true, "aria-label": "Image caption", rows: 2,
-    style: "width:100%;box-sizing:border-box;resize:none;",
-  });
-  captionInput.value = caption;
-  const copyCaptionBtn = el("button", {
-    class: "secondary-btn", type: "button",
-    onclick: async () => {
-      try {
-        await navigator.clipboard.writeText(caption);
-        copyCaptionBtn.textContent = "Caption copied";
-      } catch {
-        captionInput.focus();
-        captionInput.select();
-        copyCaptionBtn.textContent = "Select and copy the caption above";
-      }
-    },
-  }, "Copy Caption");
-  const shareBtn = el("button", { class: "primary-btn", onclick: async () => {
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: "Duty Card", text: caption });
-        return;
-      } catch (error) {
-        if (error.name === "AbortError") return;
-      }
-    }
-    const url = URL.createObjectURL(blob);
-    const link = el("a", { href: url, download: filename });
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  } }, "Share / Save Image");
-
-  const doneBtn = el("button", {
-    class: "final-done-btn",
-    type: "button",
-    onclick: async () => {
-      doneBtn.disabled = true;
-      try {
-        if (typeof options.onDone === "function") await options.onDone();
-        overlay.remove();
-      } finally {
-        doneBtn.disabled = false;
-      }
-    },
-  }, options.doneLabel || "Done");
-
-  const card = el("div", { class: "overlay-card share-card-dialog" }, [
-    el("h2", {}, "Share Duty Card"),
-    el("p", {}, "1080 × 1350 px · 4:5 image · Save or share, then tap Done."),
-    canvasWrap,
-    captionInput,
-    copyCaptionBtn,
-    el("p", {}, "If WhatsApp does not attach the caption, tap Copy Caption and paste it before sending."),
-    shareBtn,
-    doneBtn,
-  ]);
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
+  const profile = await DB.get("profile", "singleton"); const logo = await logoImage();
+  const pages = paginate(detailSections(entry, locomotives)); const canvases = pages.map(() => el("canvas"));
+  canvases.forEach((canvas, index) => drawPage(canvas, pages[index], entry, profile, logo, index + 1, canvases.length));
+  const overlay = el("div", { class:"overlay" }); const preview = el("div", { class:"duty-card-canvas-wrap", style:"display:grid;gap:12px;" }, canvases);
+  const text = caption(entry);
+  const captionArea = el("textarea", { readonly:true, rows:2, "aria-label":"WhatsApp caption", style:"width:100%;box-sizing:border-box;resize:none;" }); captionArea.value = text;
+  const copy = el("button", { class:"secondary-btn", type:"button", onclick: async () => { try { await navigator.clipboard.writeText(text); copy.textContent = "Caption copied"; } catch { captionArea.focus(); captionArea.select(); copy.textContent = "Copy the selected caption"; } } }, "Copy Caption");
+  const files = await Promise.all(canvases.map((canvas, index) => new Promise((resolve,reject) => canvas.toBlob((blob) => blob ? resolve(new File([blob], `railway-logbook-${entry.date || "record"}.png`, {type:"image/png"})) : reject(new Error("Image could not be created")), "image/png"))));
+  const share = el("button", { class:"primary-btn", type:"button", onclick: async () => {
+    if (navigator.share && navigator.canShare && navigator.canShare({ files })) { try { await navigator.share({ files, title:"Railway Logbook", text }); return; } catch (error) { if (error.name === "AbortError") return; } }
+    files.forEach((file) => { const url = URL.createObjectURL(file); const link = el("a",{href:url,download:file.name}); document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),5000); });
+  } }, "Share Diary Image");
+  const done = el("button", { class:"final-done-btn", type:"button", onclick: async () => { done.disabled=true; try { if(typeof options.onDone === "function") await options.onDone(); overlay.remove(); } finally { done.disabled=false; } } }, options.doneLabel || "Done");
+  overlay.appendChild(el("div",{class:"overlay-card share-card-dialog"},[el("h2",{},"Share Duty Diary"),el("p",{},"Complete movement record · one long spiral-diary image"),preview,captionArea,copy,share,done])); document.body.appendChild(overlay);
 }
