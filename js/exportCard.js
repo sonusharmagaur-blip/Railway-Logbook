@@ -28,7 +28,7 @@ function longDate(value) {
 }
 function clean(value) { return String(value || "").trim(); }
 function item(label, value) { return { label, value: val(value) }; }
-function rowIf(items) { return items.filter(({ value }) => value !== "—"); }
+function rowIf(items) { return items.filter(({ value, always }) => always || value !== "—"); }
 
 function detailSections(entry, locomotives) {
   const loco = locomotives.find((item) => item.id === entry.locomotiveId);
@@ -59,11 +59,17 @@ function detailSections(entry, locomotives) {
     item("Brake System", entry.brakeSystem), item("SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake),
     item("MC Status", entry.mcStatus), item("UBA DJ Open", entry.ubaDjOpen), item("UBA DJ Closed", entry.ubaDjClosed),
   ];
+  const minorEntries = (entry.minorSchedules || []).filter(m => m.date || m.km !== null && m.km !== undefined);
+  if (!minorEntries.length && (entry.minorScheduleTIDate || entry.kmSinceLastSchedule != null)) {
+    minorEntries.push({type:"TI",date:entry.minorScheduleTIDate,km:entry.kmSinceLastSchedule});
+  }
+  const minorField = (schedule,index) => item(
+    "Minor Schedule" + (index ? " " + (index+1) : ""),
+    `${val(schedule.type)} · ${date(schedule.date)}${schedule.km != null && schedule.km !== "" ? "\nKM: " + schedule.km : ""}`
+  );
   const schedules = [
     item("Major Schedule", `${val(entry.majorScheduleTypeCode)} · ${date(entry.majorScheduleDate)}`),
-    item("Minor / TI Date", date(entry.minorScheduleTIDate)),
-    item(kmFieldLabel(entry), entry.kmSinceLastSchedule),
-    ...((entry.minorSchedules || []).map((schedule, index) => item(`Minor Schedule ${index + 1}`, `${val(schedule.type)} · ${date(schedule.date)} · ${val(schedule.km)} KM`))),
+    ...(minorEntries.length ? minorEntries.map(minorField) : [item("Minor Schedule", "—")]),
   ];
   const arrival = [
     item("Arrival Time", time(entry.arrivalTime)), item("Arrival At", entry.arrivalAt),
@@ -83,15 +89,17 @@ function detailSections(entry, locomotives) {
     item("BP/FP Buildup", time(entry.bpFpTime)), item("BP/FP Place", entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace),
     item("Yard Dep", time(entry.departureTime)), item("Yard Signal", entry.yardSignal),
     item("Placement Time", time(entry.placementTime)), item("PF No.", entry.placementPfNumber),
-    item("Continuity Time", time(entry.continuityTime)), item("BPC Time", time(entry.bpcTime)),
+    item("Continuity Time", time(entry.continuityTime)), {...item("BPC Time", time(entry.bpcTime)), always:true},
     item("Made Over Charge", entry.madeOverChargeName), item("HQ", entry.madeOverChargeHQ), item("Made Over Time", time(entry.madeOverChargeTime)),
-    item("Final Dep Time", time(entry.finalDepartureTime)),
+    {...item("Departure Time", time(entry.finalDepartureTime)), always:true},
   ];
   const officials = (entry.officialDetails || []).map((official, index) => item(`Official ${index + 1}`, `${val(official.designation)} · ${val(official.name)}`));
   const additional = (entry.additionalLocomotives || []).map((loco, index) => item(`Additional Loco ${index + 1}`, `${val(loco.locomotiveNumberSnapshot)} · ${val(loco.locomotiveType)} · ${val(loco.locomotiveShed)} · ${val(loco.cabSelection)} · ${val(loco.ptType)}`));
   const extra = [
     item("Repair List", entry.repairList), item("Remarks", entry.remarks),
-    ...officials, ...additional,
+    ...additional,
+  ];
+  const privateNumbers = [
     ...(entry.privateNumberDetails || []).flatMap((p,i) => Object.entries(p).filter(([k,v]) => !["id","isComplete"].includes(k) && v !== "" && v != null).map(([k,v]) => item("PN " + (i+1) + " · " + k.replace(/([A-Z])/g," $1"), /Time$/.test(k) ? time(v) : v))),
     ...["privateNumber","yardMasterName","pmName"].filter(k=>entry[k]).map(k=>item(k.replace(/([A-Z])/g," $1"),entry[k])),
   ];
@@ -103,6 +111,8 @@ function detailSections(entry, locomotives) {
     ...((entry.movementType === "departure" || isDot) ? [{ title:"Departure Details", rows: departure }] : []),
     ...(entry.movementType === "shed_shunting" ? [{title:"Shed Shunting",rows:[item("TOC Time",time(entry.shuntingTocTime)),item("TOC Place",entry.shuntingTocPlace),item("Movement Upto",entry.shuntingMovementUpto),item("Stable Time",time(entry.shuntingStableTime)),item("Stable Place",entry.shuntingStablePlace),item("CC Name",entry.shuntingCCName)]}] : []),
     { title:"Other Details", rows: extra },
+    { title:"Private Number Details", rows: privateNumbers },
+    { title:"Officials", rows: officials },
   ];
   return sections.map(({ title, rows }) => ({ title, rows: rowIf(rows) })).filter(({ rows }) => rows.length);
 }
@@ -111,6 +121,7 @@ function rounded(ctx, x, y, width, height, radius) {
   ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.closePath();
 }
 function wrap(ctx, text, width) {
+  if (String(text).includes("\n")) return String(text).split("\n").flatMap(line => wrap(ctx,line,width));
   const words = String(text).split(/\s+/); const lines = []; let line = "";
   for (let word of words) {
     while (ctx.measureText(word).width > width) {
