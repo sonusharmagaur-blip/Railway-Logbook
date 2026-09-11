@@ -106,9 +106,9 @@ function detailSections(entry, locomotives) {
   const departure = [
     item("Loco Takeover", time(entry.locoTakeoverTime)), item("Takeover Place", entry.locoTakeoverPlace), item("Checked Upto", time(entry.locoCheckedUptoTime)),
     item("Loco Offer", time(entry.locoOfferTime)), item("Offer Place", offerPlace), item("Offer Dep Time", time(entry.locoOfferDepartureTime)),
-    item("Engine On Train", time(entry.engineOnTrainTime)), item("EOT Place", entry.engineOnTrainPlace),
+    {...item("Engine On Train", atPlace(entry.engineOnTrainTime, entry.engineOnTrainPlace)), pairKey:"eot-bpfp"},
+    {...item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)), pairKey:"eot-bpfp"},
     item("HOG Attached From", atPlace(entry.hogAttachedTime, entry.hogAttachedPlace)), item("HOG Attached To", atPlace(entry.hogAttachedToTime, entry.hogAttachedPlace)),
-    item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)),
     item("Yard Dep", time(entry.departureTime)), item("Yard Signal", entry.yardSignal),
     item("Placement Time", time(entry.placementTime)), item("PF No.", entry.placementPfNumber),
     {...item("Continuity Time", time(entry.continuityTime)), pairKey:"continuity", always:true}, {...item("BPC Time", time(entry.bpcTime)), pairKey:"continuity", always:true},
