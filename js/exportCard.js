@@ -237,7 +237,7 @@ function drawPage(canvas, groups, entry, profile, logo) {
   let y=180+trainHeight;
   for(const group of layout) {
     if (group.title !== "Movement Identity") {
-    ctx.fillStyle=maroon;ctx.font=`800 11px ${FONT}`;ctx.fillText(group.title.toUpperCase(),50,y);
+    ctx.fillStyle=maroon;ctx.font=`800 11px ${FONT}`;ctx.fillText(group.title === "Departure Details" ? "MOVEMENT TIMELINE" : group.title.toUpperCase(),50,y);
     ctx.strokeStyle="#cbb79b";ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(50,y+7);ctx.lineTo(512,y+7);ctx.stroke();y+=23;
     }
     for(const row of group.rows) {
