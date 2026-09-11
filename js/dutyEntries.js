@@ -2105,6 +2105,12 @@ async function showForm(container, setHeaderTitle, entryId) {
   officialsFab.addEventListener("click", openOfficialsPrompt);
   renderOfficialsFab();
   container.appendChild(officialsFab);
+  trainLocoPage.appendChild(el("button", {
+    class:"secondary-btn officials-inline-btn", type:"button",
+    "aria-label":"Add Officials in Step 1",
+    onclick: () => openOfficialsPrompt(),
+  }, "+ Add Officials"));
+
 
   function reviewField(label, value) {
     return el("div", { class: "review-field" }, [
