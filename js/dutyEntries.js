@@ -1847,6 +1847,14 @@ async function showForm(container, setHeaderTitle, entryId) {
       createMovementManualField("HQ", "madeOverChargeHQ", "HQ"),
       createMovementTimeField("Made Over Charge Time", "madeOverChargeTime"),
     ]));
+  departureSection.appendChild(el("div", { class:"movement-detail-row" }, [
+    createMovementTimeField("Final Dep Time", "finalDepartureTime"),
+  ]));
+  departureSection.appendChild(el("button", {
+    class:"secondary-btn officials-inline-btn", type:"button",
+    "aria-label":"Add Officials to movement",
+    onclick: () => openOfficialsPrompt(),
+  }, "+ Add Officials"));
   if (isArrivalMovement) {
     remainingDetailsPage.appendChild(timelineSection);
     dotDeparturePage.appendChild(el("div", { class: "form-section" }, [
