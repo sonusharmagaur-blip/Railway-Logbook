@@ -17,7 +17,7 @@ const maroon = "#7b1f1b";
 const gold = "#c99128";
 
 function val(value, fallback = "—") {
-  return value === undefined || value === null || value === "" ? fallback : String(value);
+  return value === undefined || value === null || String(value).trim() === "" ? fallback : String(value).trim();
 }
 function time(value) { return value ? formatTime(value) : "—"; }
 function date(value) { return value ? formatDate(value) : "—"; }
@@ -28,7 +28,8 @@ function longDate(value) {
 }
 function clean(value) { return String(value || "").trim(); }
 function item(label, value) { return { label, value: val(value) }; }
-function atPlace(value, place) { return time(value) + (clean(place) ? " @ " + clean(place) : ""); }
+function joinDetails(values) { return values.filter(v => v != null && String(v).trim() && v !== "—").join(" · "); }
+function atPlace(value, place) { return (value ? time(value) : "") + (clean(place) ? (value ? " @ " : "@ ") + clean(place) : ""); }
 function volts(value) { return clean(value) ? clean(value).replace(/\s*(volts|v)$/i, "") + " Volts" : "—"; }
 function spareSummary(entry) {
   const items = entry.spareItems || {};
@@ -37,7 +38,7 @@ function spareSummary(entry) {
   if (items.other && clean(items.otherText)) selected.push(clean(items.otherText));
   return selected.join(", ");
 }
-function rowIf(items) { return items.filter(({ value, always, pairKey }) => always || value !== "—" || pairKey && items.some(f => f.pairKey === pairKey && f.value !== "—")); }
+function rowIf(items) { return items.filter(({ value }) => value !== "—" && clean(value)); }
 
 function majorScheduleOverdue(value, movementDate) {
   const day = (input) => {
@@ -69,15 +70,18 @@ function detailSections(entry, locomotives) {
     item("BUR Make", entry.burMake === "Other" ? entry.burMakeOther : entry.burMake),
     item("HOG Make", entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake),
     item("HOG Status", entry.hogStatus),
-    item("UIC Status", uicDisplayStatus(entry)),
+    item("UIC Status", entry.uicStatus ? uicDisplayStatus(entry) : ""),
     item("RTIS", entry.rtisFitted === "Not Fitted" ? "Not Fitted" : entry.rtisStatus),
     item("AC", entry.acFitted === "Not Fitted" ? "Not Fitted" : entry.acStatus),
+    item("Brake System", entry.brakeSystem),
     item("Kavach Make", entry.kavachMake), item("Kavach Status", entry.kavachStatus),
-    item("Brake System", entry.brakeSystem), item("SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake),
+    item("SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake),
     item("MC %", entry.mcStatus), item("UBA DJ Open", volts(entry.ubaDjOpen)), item("UBA DJ Closed", volts(entry.ubaDjClosed)),
     {...item("Spare Items", spareSummary(entry)), fullWidth:true},
   ];
   for (const field of components) {
+    if (["AC", "Brake System"].includes(field.label)) field.pairKey = "ac-brake";
+    if (["Kavach Make", "Kavach Status"].includes(field.label)) field.pairKey = "kavach";
     if (["SPM Make", "MC %"].includes(field.label)) field.pairKey = "spm";
     if (["UBA DJ Open", "UBA DJ Closed"].includes(field.label)) field.pairKey = "uba";
   }
@@ -87,10 +91,10 @@ function detailSections(entry, locomotives) {
   }
   const minorField = (schedule,index) => ({ ...item(
     "Minor Schedule" + (index ? " " + (index+1) : ""),
-    `${val(schedule.type)} · ${date(schedule.date)}${schedule.km != null && schedule.km !== "" ? " · KM-" + schedule.km : ""}`
+    joinDetails([schedule.type, date(schedule.date), schedule.km != null && schedule.km !== "" ? "KM-" + schedule.km : ""])
   ), alert: schedule.km !== "" && schedule.km != null && Number(schedule.km) > 4500 });
   const schedules = [
-    {...item("Major Schedule", `${val(entry.majorScheduleTypeCode)} · ${date(entry.majorScheduleDate)}${majorScheduleOverdue(entry.majorScheduleDate, entry.date) ? " (OVERDUE)" : ""}`), alert:majorScheduleOverdue(entry.majorScheduleDate, entry.date)},
+    {...item("Major Schedule", joinDetails([entry.majorScheduleTypeCode, date(entry.majorScheduleDate)]) + (majorScheduleOverdue(entry.majorScheduleDate, entry.date) ? " (OVERDUE)" : "")), alert:majorScheduleOverdue(entry.majorScheduleDate, entry.date)},
     ...(minorEntries.length ? minorEntries.map(minorField) : [item("Minor Schedule", "—")]),
   ];
   const arrival = [
@@ -105,7 +109,7 @@ function detailSections(entry, locomotives) {
   ];
   const departure = [
     item("Loco Takeover", time(entry.locoTakeoverTime)), item("Takeover Place", entry.locoTakeoverPlace), item("Checked Upto", time(entry.locoCheckedUptoTime)),
-    item("Loco Offer", time(entry.locoOfferTime)), item("Offer Place", offerPlace), item("Offer Dep Time", time(entry.locoOfferDepartureTime)),
+    {...item("Loco Offer", [atPlace(entry.locoOfferTime, offerPlace), entry.locoOfferDepartureTime ? "DEP " + time(entry.locoOfferDepartureTime) : ""].filter(Boolean).join(" ")), fullWidth:true},
     {...item("Engine On Train", atPlace(entry.engineOnTrainTime, entry.engineOnTrainPlace)), pairKey:"eot-bpfp"},
     {...item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)), pairKey:"eot-bpfp"},
     item("HOG Attached From", atPlace(entry.hogAttachedTime, entry.hogAttachedPlace)), item("HOG Attached To", atPlace(entry.hogAttachedToTime, entry.hogAttachedPlace)),
@@ -115,8 +119,8 @@ function detailSections(entry, locomotives) {
     item("Made Over Charge", entry.madeOverChargeName), item("HQ", entry.madeOverChargeHQ), item("Made Over Time", time(entry.madeOverChargeTime)),
     {...item("Departure Time", time(entry.finalDepartureTime)), always:true},
   ];
-  const officials = (entry.officialDetails || []).map((official, index) => item(`Official ${index + 1}`, `${val(official.designation)} · ${val(official.name)}`));
-  const additional = (entry.additionalLocomotives || []).map((loco, index) => item(`Additional Loco ${index + 1}`, `${val(loco.locomotiveNumberSnapshot)} · ${val(loco.locomotiveType)} · ${val(loco.locomotiveShed)} · ${val(loco.cabSelection)} · ${val(loco.ptType)}`));
+  const officials = (entry.officialDetails || []).map((official, index) => item(`Official ${index + 1}`, joinDetails([official.designation, official.name])));
+  const additional = (entry.additionalLocomotives || []).map((loco, index) => item(`Additional Loco ${index + 1}`, joinDetails([loco.locomotiveNumberSnapshot,loco.locomotiveType,loco.locomotiveShed,loco.cabSelection,loco.ptType])));
   const extra = [
     item("Repair List", entry.repairList), item("Remarks", entry.remarks),
     ...additional,
@@ -203,11 +207,13 @@ function prepareDiary(ctx, groups) {
 function drawPage(canvas, groups, entry, profile, logo) {
   const ctx = canvas.getContext("2d");
   const layout = prepareDiary(ctx, groups);
-  const headerTrains = entry.movementType === "departure" ? [`${val(entry.trainNumber)} · ${val(entry.trainName)}`] :
-    entry.movementType === "arrival" && entry.isDotTrain ? [`ARRIVAL: ${val(entry.trainNumber)} · ${val(entry.trainName)}`, `DEP: ${val(entry.dotTrainNumber)} · ${val(entry.dotTrainName)}`] :
-    entry.movementType === "arrival" ? [`${val(entry.trainNumber)} · ${val(entry.trainName)}`] : [];
+  const trainIdentity = joinDetails([entry.trainNumber,entry.trainName]);
+  const dotIdentity = joinDetails([entry.dotTrainNumber,entry.dotTrainName]);
+  const headerTrains = entry.movementType === "arrival" && entry.isDotTrain ?
+    [trainIdentity ? "ARRIVAL: " + trainIdentity : "", dotIdentity ? "DEP: " + dotIdentity : ""] :
+    ["departure","arrival"].includes(entry.movementType) ? [trainIdentity] : [];
   ctx.font = `800 14px ${FONT}`;
-  const trainLines = headerTrains.flatMap(text => wrap(ctx,text,462));
+  const trainLines = headerTrains.filter(Boolean).flatMap(text => wrap(ctx,text,462));
   const trainHeight = trainLines.length ? trainLines.length*18+12 : 0;
   const height = Math.max(CARD_HEIGHT,180 + trainHeight + layout.reduce((n,g)=>n+(g.title === "Movement Identity" ? 7 : 30)+g.rows.reduce((v,r)=>v+r.height,0),0)+52);
   canvas.width=CARD_WIDTH*SCALE; canvas.height=Math.ceil(height*SCALE); ctx.scale(SCALE,SCALE);
@@ -229,7 +235,7 @@ function drawPage(canvas, groups, entry, profile, logo) {
   ctx.fillStyle=ink;ctx.font=`800 14px ${FONT}`;
   trainLines.forEach((line,i)=>ctx.fillText(line,50,89+i*18,462));
   ctx.fillStyle=maroon;rounded(ctx,48,82+trainHeight,465,76,10);ctx.fill();
-  const blocks=[["LOCO NUMBER",field("Loco Number")],["TYPE",field("Loco Type")],["SHED",field("Shed")]];
+  const blocks=[["LOCO NUMBER",field("Loco Number")],["TYPE",field("Loco Type")],["SHED",field("Shed")]].filter(([,value])=>value !== "—");
   blocks.forEach(([label,value],i)=>{
     const x=62+i*153;
     ctx.fillStyle="#ffdc98";ctx.font=`700 9px ${FONT}`;ctx.fillText(label,x,102+trainHeight);
