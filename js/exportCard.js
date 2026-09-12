@@ -2,6 +2,7 @@ import { DB } from "./db.js";
 import { UICStatus, kmFieldLabel, uicDisplayStatus } from "./models.js";
 import { el, formatDate, formatTime } from "./util.js";
 import { APP_LOGO } from "./shareLogo.js";
+import { loadDiaryFont } from "./diaryFont.js";
 
 
 
@@ -10,7 +11,7 @@ import { APP_LOGO } from "./shareLogo.js";
 const SCALE = 2;
 const CARD_WIDTH = 540;
 const CARD_HEIGHT = 675;
-const FONT = 'Arial, sans-serif';
+const FONT = '"RailwayDiaryHand", "Segoe Print", cursive';
 const paper = "#fffaf0";
 const ink = "#3d1f1c";
 const maroon = "#7b1f1b";
@@ -269,6 +270,7 @@ function caption(entry) {
 function logoImage() { return new Promise((resolve) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => resolve(null); image.src = APP_LOGO; }); }
 
 export async function openExportCard(entry, locomotives, options = {}) {
+  await loadDiaryFont();
   const profile = await DB.get("profile", "singleton"); const logo = await logoImage();
   const pages = paginate(detailSections(entry, locomotives)); const canvases = pages.map(() => el("canvas"));
   canvases.forEach((canvas, index) => drawPage(canvas, pages[index], entry, profile, logo, index + 1, canvases.length));
