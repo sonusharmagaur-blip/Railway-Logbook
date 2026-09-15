@@ -176,7 +176,7 @@ function paginate(sections) { return [sections]; }
 function timelineFor(group, entry) {
   if (group.title === "Departure Details" && entry.locoTakeoverTime && entry.finalDepartureTime) return {
     start:time(entry.locoTakeoverTime), end:time(entry.finalDepartureTime),
-    startLabel:"LOCO TAKEOVER", endLabel:"DEPARTURE", keys:["Loco Takeover","Departure Time"],
+    startLabel:"LOCO TAKEOVER", endLabel:"DEPARTURE", keys:[],
   };
   if (group.title === "Arrival Details" && entry.arrivalTime && entry.arrivalShedArrivalTime) return {
     start:time(entry.arrivalTime), end:time(entry.arrivalShedArrivalTime),
