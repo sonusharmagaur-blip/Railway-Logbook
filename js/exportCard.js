@@ -176,23 +176,13 @@ function paginate(sections) { return [sections]; }
 function timelineFor(group, entry) {
   if (group.title === "Departure Details" && entry.locoTakeoverTime && entry.finalDepartureTime) return {
     start:time(entry.locoTakeoverTime), end:time(entry.finalDepartureTime),
-    startPlace:clean(entry.locoTakeoverPlace),
-    endPlace:clean(entry.placementPfNumber) ? (/^PF\b/i.test(clean(entry.placementPfNumber)) ? clean(entry.placementPfNumber) : "PF " + clean(entry.placementPfNumber)) : "",
-    startLabel:"LOCO TAKEOVER", endLabel:"DEPARTURE", keys:["Loco Takeover","Departure Time","Takeover Place","PF No."],
+    startLabel:"LOCO TAKEOVER", endLabel:"DEPARTURE", keys:["Loco Takeover","Departure Time"],
   };
   if (group.title === "Arrival Details" && entry.arrivalTime && entry.arrivalShedArrivalTime) return {
     start:time(entry.arrivalTime), end:time(entry.arrivalShedArrivalTime),
-    startPlace:clean(entry.arrivalAt), endPlace:clean(entry.arrivalPlace),
     startLabel:"ARRIVAL", endLabel:"SHED ARRIVAL", keys:["Arrival Time","Shed Arrival Time"],
   };
   return null;
-}
-function timelinePlaceLines(ctx, timeline) {
-  ctx.font="600 9px Arial";
-  return [timeline.startPlace,timeline.endPlace].map(place=>place?wrap(ctx,"@ "+place,125):[]);
-}
-function timelineHeight(ctx, timeline) {
-  return timeline ? 55+Math.max(...timelinePlaceLines(ctx,timeline).map(lines=>lines.length))*11 : 0;
 }
 function prepareDiary(ctx, groups, entry = {}) {
   return groups.map(group => {
@@ -243,7 +233,7 @@ function drawPage(canvas, groups, entry, profile, logo) {
   const bandHeight=(blocks.length?64:0)+(cabBlocks.length?36:0);
   const locoHeight=bandHeight+(statuses.length?50:0);
   const contentTop=72+trainHeight+locoHeight;
-  const contentHeight=layout.reduce((n,g)=>n+(g.title==="Movement Identity"?0:24)+timelineHeight(ctx,g.timeline)+g.rows.reduce((a,r)=>a+r.height,0)+5,0);
+  const contentHeight=layout.reduce((n,g)=>n+(g.title==="Movement Identity"?0:24)+(g.timeline?55:0)+g.rows.reduce((a,r)=>a+r.height,0)+5,0);
   const height=Math.max(675,contentTop+contentHeight+46);
   canvas.width=1080;canvas.height=Math.ceil(height*2);ctx.scale(2,2);
   ctx.fillStyle="#fff";ctx.fillRect(0,0,540,height);
@@ -298,16 +288,10 @@ function drawPage(canvas, groups, entry, profile, logo) {
       ctx.textAlign="right";ctx.fillText(t.end,515,y+24,103);ctx.textAlign="left";
       ctx.font="700 8px Arial";ctx.fillStyle="#303640";ctx.fillText(t.startLabel,25,y+42,110);
       ctx.textAlign="right";ctx.fillText(t.endLabel,515,y+42,110);ctx.textAlign="left";
-      const placeLines=timelinePlaceLines(ctx,t);
-      ctx.fillStyle="#626873";
-      placeLines[0].forEach((line,i)=>ctx.fillText(line,25,y+54+i*11,125));
-      ctx.textAlign="right";
-      placeLines[1].forEach((line,i)=>ctx.fillText(line,515,y+54+i*11,125));
-      ctx.textAlign="left";
       ctx.strokeStyle="#f77a31";ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(145,y+21);ctx.lineTo(395,y+21);ctx.stroke();
       for(const x of [145,395]){ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(x,y+21,4,0,Math.PI*2);ctx.fill();ctx.stroke();}
       if(logo)ctx.drawImage(logo,255,y+6,30,30);
-      y+=timelineHeight(ctx,t);
+      y+=55;
     }
     for(const row of group.rows){
       row.pair.forEach((f,i)=>{
