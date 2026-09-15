@@ -1,8 +1,6 @@
 import { DB } from "./db.js";
 import { UICStatus, kmFieldLabel, uicDisplayStatus } from "./models.js";
 import { el, formatDate, formatTime } from "./util.js";
-import { APP_LOGO } from "./shareLogo.js";
-import { loadDiaryFont } from "./diaryFont.js";
 
 
 
@@ -52,9 +50,9 @@ function majorScheduleOverdue(value, movementDate) {
 }
 function detailSections(entry, locomotives) {
   const loco = locomotives.find((item) => item.id === entry.locomotiveId);
-  const locoNumber = entry.locomotiveNumberSnapshot || loco?.number;
-  const locoType = entry.locomotiveType || loco?.locoClass;
-  const locoShed = entry.locomotiveShed || loco?.shed;
+  const locoNumber = entry.locomotiveNumberSnapshot ?? loco?.number;
+  const locoType = entry.locomotiveType ?? loco?.locoClass;
+  const locoShed = entry.locomotiveShed ?? loco?.shed;
   const isDot = entry.movementType === "arrival" && entry.isDotTrain;
   const offerPlace = entry.locoOfferPlace === "Other" ? entry.locoOfferPlaceOther : entry.locoOfferPlace;
   const trainRows = [
@@ -72,8 +70,8 @@ function detailSections(entry, locomotives) {
     item("HOG Make", entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake),
     item("HOG Status", entry.hogStatus),
     item("UIC Status", entry.uicStatus ? uicDisplayStatus(entry) : ""),
-    item("RTIS", entry.rtisFitted === "Not Fitted" ? "Not Fitted" : entry.rtisStatus),
-    item("AC", entry.acFitted === "Not Fitted" ? "Not Fitted" : entry.acStatus),
+    item("RTIS", entry.rtisFitted === "Not Fitted" ? "Not Fitted" : entry.rtisStatus || entry.rtisFitted),
+    item("AC", entry.acFitted === "Not Fitted" ? "Not Fitted" : entry.acStatus || entry.acFitted),
     item("Brake System", entry.brakeSystem),
     item("Kavach Make", entry.kavachMake), item("Kavach Status", entry.kavachStatus),
     item("SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake),
@@ -86,7 +84,7 @@ function detailSections(entry, locomotives) {
     if (["SPM Make", "MC %"].includes(field.label)) field.pairKey = "spm";
     if (["UBA DJ Open", "UBA DJ Closed"].includes(field.label)) field.pairKey = "uba";
   }
-  const minorEntries = (entry.minorSchedules || []).filter(m => m.date || m.km !== null && m.km !== undefined);
+  const minorEntries = (entry.minorSchedules || []).filter(m => m.type || m.date || m.km !== "" && m.km !== null && m.km !== undefined);
   if (!minorEntries.length && (entry.minorScheduleTIDate || entry.kmSinceLastSchedule != null)) {
     minorEntries.push({type:"TI",date:entry.minorScheduleTIDate,km:entry.kmSinceLastSchedule});
   }
@@ -113,14 +111,16 @@ function detailSections(entry, locomotives) {
     {...item("Loco Offer", [atPlace(entry.locoOfferTime, offerPlace), entry.locoOfferDepartureTime ? "DEP " + time(entry.locoOfferDepartureTime) : ""].filter(Boolean).join(" ")), fullWidth:true},
     {...item("Engine On Train", atPlace(entry.engineOnTrainTime, entry.engineOnTrainPlace)), pairKey:"eot-bpfp"},
     {...item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)), pairKey:"eot-bpfp"},
-    item("HOG Attached From", atPlace(entry.hogAttachedTime, entry.hogAttachedPlace)), item("HOG Attached To", atPlace(entry.hogAttachedToTime, entry.hogAttachedPlace)),
+    item("HOG Attached From", entry.hogAttachedTime ? atPlace(entry.hogAttachedTime, entry.hogAttachedPlace) : ""),
+    item("HOG Attached To", entry.hogAttachedToTime ? atPlace(entry.hogAttachedToTime, entry.hogAttachedPlace) : ""),
+    ...(!entry.hogAttachedTime && !entry.hogAttachedToTime ? [item("HOG Place",entry.hogAttachedPlace)] : []),
     item("Yard Dep", time(entry.departureTime)), item("Yard Signal", entry.yardSignal),
     item("Placement Time", time(entry.placementTime)), item("PF No.", entry.placementPfNumber),
     {...item("Continuity Time", time(entry.continuityTime)), pairKey:"continuity", always:true}, {...item("BPC Time", time(entry.bpcTime)), pairKey:"continuity", always:true},
     item("Made Over Charge", entry.madeOverChargeName), item("HQ", entry.madeOverChargeHQ), item("Made Over Time", time(entry.madeOverChargeTime)),
     {...item("Departure Time", time(entry.finalDepartureTime)), always:true},
   ];
-  const officials = (entry.officialDetails || []).map((official, index) => item(`Official ${index + 1}`, joinDetails([official.designation, official.name])));
+  const officials = (entry.officialDetails || []).filter(official => clean(official.name)).map((official, index) => item(`Official ${index + 1}`, joinDetails([official.designation, official.name])));
   const additional = (entry.additionalLocomotives || []).map((loco, index) => item(`Additional Loco ${index + 1}`, joinDetails([loco.locomotiveNumberSnapshot,loco.locomotiveType,loco.locomotiveShed,loco.cabSelection,loco.ptType])));
   const extra = [
     item("Repair List", entry.repairList), item("Remarks", entry.remarks),
@@ -155,7 +155,7 @@ function detailSections(entry, locomotives) {
 }
 
 function rounded(ctx, x, y, width, height, radius) {
-  ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.closePath();
+  ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath();
 }
 function wrap(ctx, text, width) {
   if (String(text).includes("\n")) return String(text).split("\n").flatMap(line => wrap(ctx,line,width));
@@ -173,103 +173,133 @@ function wrap(ctx, text, width) {
   if (line) lines.push(line); return lines;
 }
 function paginate(sections) { return [sections]; }
-function prepareDiary(ctx, groups) {
+
+function timelineFor(group, entry) {
+  if (group.title === "Departure Details" && entry.locoTakeoverTime && entry.finalDepartureTime) return {
+    start:time(entry.locoTakeoverTime), end:time(entry.finalDepartureTime),
+    startLabel:"LOCO TAKEOVER", endLabel:"DEPARTURE", keys:["Loco Takeover","Departure Time"],
+  };
+  if (group.title === "Arrival Details" && entry.arrivalTime && entry.arrivalShedArrivalTime) return {
+    start:time(entry.arrivalTime), end:time(entry.arrivalShedArrivalTime),
+    startLabel:"ARRIVAL", endLabel:"SHED ARRIVAL", keys:["Arrival Time","Shed Arrival Time"],
+  };
+  return null;
+}
+function prepareDiary(ctx, groups, entry = {}) {
   return groups.map(group => {
-    const fields = group.rows.filter(f => !f.inHeader && (group.title !== "Movement Identity" || !["Date","Movement","Loco Number","Loco Type","Shed"].includes(f.label)));
-    const rows = [];
-    const pairs = [];
-    let pending = [];
+    const timeline = timelineFor(group,entry);
+    const fields = group.rows.filter(f => !f.inHeader && !timeline?.keys.includes(f.label) && (group.title !== "Movement Identity" || !["Date","Movement","Loco Number","Loco Type","Shed"].includes(f.label)));
+    const pairs = []; let pending=[];
     for (const f of fields) {
-      if (f.fullWidth) {
-        if (pending.length) { pairs.push(pending); pending = []; }
-        pairs.push([f]); continue;
-      }
-      if (pending.length && (pending[0].pairKey || f.pairKey) && pending[0].pairKey !== f.pairKey) {
-        pairs.push(pending); pending = [];
-      }
+      if (f.fullWidth) {if(pending.length)pairs.push(pending);pending=[];pairs.push([f]);continue;}
+      if (pending.length && (pending[0].pairKey || f.pairKey) && pending[0].pairKey !== f.pairKey) {pairs.push(pending);pending=[];}
       pending.push(f);
-      if (pending.length === 2) { pairs.push(pending); pending = []; }
+      if(pending.length===2){pairs.push(pending);pending=[];}
     }
-    if (pending.length) pairs.push(pending);
-    for (const fieldsPair of pairs) {
-      const pair = fieldsPair.map(f => {
-        const stacked = group.title === "Schedule Details";
-        ctx.font = `700 8.5px ${FONT}`;
-        const labels = wrap(ctx, f.label.toUpperCase(), stacked ? 217 : 94);
-        ctx.font = `700 11px ${FONT}`;
-        const values = stacked ? [f.value] : wrap(ctx, f.value, f.fullWidth ? 362 : 117);
-        return { labels, values, stacked, alert:f.alert, fullWidth:f.fullWidth };
+    if(pending.length)pairs.push(pending);
+    const rows=pairs.map(pairFields=>{
+      const pair=pairFields.map(f=>{
+        const stacked=group.title==="Schedule Details";
+        ctx.font="700 8.5px Arial";
+        const labels=wrap(ctx,f.label.toUpperCase(),stacked?236:91);
+        ctx.font=`700 11.5px ${FONT}`;
+        const values=stacked?[f.value]:wrap(ctx,f.value,f.fullWidth?398:140);
+        return {labels,values,stacked,fullWidth:f.fullWidth,alert:f.alert};
       });
-      rows.push({pair, height:Math.max(25,...pair.map(f=>f.stacked ? 38 : Math.max(f.labels.length*10,f.values.length*13)+9))});
-    }
-    return {title:group.title,rows};
-  }).filter(g=>g.rows.length);
+      return {pair,height:Math.max(25,...pair.map(f=>f.stacked?40:Math.max(f.labels.length*10.5,f.values.length*14)+12))};
+    });
+    return {title:group.title,rows,timeline};
+  }).filter(g=>g.rows.length||g.timeline);
 }
 function drawPage(canvas, groups, entry, profile, logo) {
-  const ctx = canvas.getContext("2d");
-  const layout = prepareDiary(ctx, groups);
-  const trainIdentity = joinDetails([entry.trainNumber,entry.trainName]);
-  const dotIdentity = joinDetails([entry.dotTrainNumber,entry.dotTrainName]);
-  const headerTrains = entry.movementType === "arrival" && entry.isDotTrain ?
-    [trainIdentity ? "ARRIVAL: " + trainIdentity : "", dotIdentity ? "DEP: " + dotIdentity : ""] :
-    ["departure","arrival"].includes(entry.movementType) ? [trainIdentity] : [];
-  ctx.font = `800 14px ${FONT}`;
-  const trainLines = headerTrains.filter(Boolean).flatMap(text => wrap(ctx,text,462));
-  const trainHeight = trainLines.length ? trainLines.length*18+12 : 0;
-  const height = Math.max(CARD_HEIGHT,180 + trainHeight + layout.reduce((n,g)=>n+(g.title === "Movement Identity" ? 7 : 30)+g.rows.reduce((v,r)=>v+r.height,0),0)+52);
-  canvas.width=CARD_WIDTH*SCALE; canvas.height=Math.ceil(height*SCALE); ctx.scale(SCALE,SCALE);
-  ctx.fillStyle=paper; rounded(ctx,0,0,CARD_WIDTH,height,22); ctx.fill();
-  ctx.fillStyle="#f7ecd4"; ctx.fillRect(0,0,32,height);
-  ctx.strokeStyle="#cbb79b"; ctx.lineWidth=1; ctx.beginPath();ctx.moveTo(31,0);ctx.lineTo(31,height);ctx.stroke();
-  for(let y=20;y<height;y+=36) {
-    ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(28,y,5,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle="#8d7862";ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(22,y,12,5,0,0,Math.PI*2);ctx.stroke();
-  }
-  if(logo) {ctx.save();ctx.globalAlpha=.08;ctx.drawImage(logo,118,height/2-152,304,304);ctx.restore();}
-  ctx.fillStyle=maroon;ctx.fillRect(49,24,6,45);
-  ctx.fillStyle=ink;ctx.font=`800 19px ${FONT}`;
-  const title=entry.movementType==="arrival"&&entry.isDotTrain?"DOT DEPARTURE RECORD":entry.movementType==="arrival"?"ARRIVAL MOVEMENT RECORD":entry.movementType==="shed_shunting"?"SHED SHUNTING RECORD":"DEPARTURE MOVEMENT RECORD";
-  ctx.fillText(title,66,43,444);ctx.font=`700 10px ${FONT}`;ctx.fillStyle="#755a48";ctx.fillText(longDate(entry.date),66,64);
-  // Prominent locomotive identity; use resolved values from the existing field builder.
+  const ctx=canvas.getContext("2d"), margin=12, width=516, half=258;
+  const layout=prepareDiary(ctx,groups,entry);
+  const train=joinDetails([entry.trainNumber,entry.trainName]);
+  const dotTrain=joinDetails([entry.dotTrainNumber,entry.dotTrainName]);
+  const headings=entry.movementType==="arrival"&&entry.isDotTrain?
+    [train?"ARRIVAL: "+train:"",dotTrain?"DEP: "+dotTrain:""]:
+    ["arrival","departure"].includes(entry.movementType)?[train]:[];
+  ctx.font="800 19px Arial";
+  const trainLines=headings.filter(Boolean).flatMap(t=>wrap(ctx,t,492));
+  const trainHeight=trainLines.length?trainLines.length*23+16:8;
   const identity=groups.find(g=>g.title==="Movement Identity")?.rows||[];
-  const field=name=>identity.find(f=>f.label===name)?.value||"—";
-  ctx.fillStyle=ink;ctx.font=`800 14px ${FONT}`;
-  trainLines.forEach((line,i)=>ctx.fillText(line,50,89+i*18,462));
-  ctx.fillStyle=maroon;rounded(ctx,48,82+trainHeight,465,76,10);ctx.fill();
-  const blocks=[["LOCO NUMBER",field("Loco Number")],["TYPE",field("Loco Type")],["SHED",field("Shed")]].filter(([,value])=>value !== "—");
-  blocks.forEach(([label,value],i)=>{
-    const x=62+i*153;
-    ctx.fillStyle="#ffdc98";ctx.font=`700 9px ${FONT}`;ctx.fillText(label,x,102+trainHeight);
-    ctx.fillStyle="#fffaf0";ctx.font=`800 23px ${FONT}`;ctx.fillText(value,x,137+trainHeight,136);
-  });
-  let y=180+trainHeight;
-  for(const group of layout) {
-    if (group.title !== "Movement Identity") {
-    ctx.fillStyle=maroon;ctx.font=`800 11px ${FONT}`;ctx.fillText(group.title === "Departure Details" ? "MOVEMENT TIMELINE" : group.title.toUpperCase(),50,y);
-    ctx.strokeStyle="#cbb79b";ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(50,y+7);ctx.lineTo(512,y+7);ctx.stroke();y+=23;
-    }
-    for(const row of group.rows) {
-      row.pair.forEach((f,index)=>{
-        const x=50+index*236;
-        ctx.fillStyle=group.title === "Movement Identity" ? ink : "#71594b";ctx.font=`800 8.5px ${FONT}`;f.labels.forEach((line,i)=>ctx.fillText(line,x,y+i*10));
-        ctx.fillStyle=f.alert ? "#c01620" : ink;ctx.font=`700 11px ${FONT}`;f.values.forEach((line,i)=>ctx.fillText(line,f.stacked ? x : x+100,y+(f.stacked ? 16 : 0)+i*13,f.stacked ? 217 : f.fullWidth ? 362 : 117));
-      });
-      ctx.strokeStyle="rgba(170,143,109,.20)";ctx.beginPath();ctx.moveTo(50,y+row.height-11);ctx.lineTo(512,y+row.height-11);ctx.stroke();
-      y+=row.height;
-    }
-    y+=7;
+  const blocks=[["LOCO NUMBER","Loco Number"],["TYPE","Loco Type"],["SHED","Shed"]]
+    .map(([label,key])=>[label,identity.find(f=>f.label===key)?.value]).filter(([,value])=>value&&value!=="—");
+  const locoHeight=blocks.length?64:0;
+  const contentTop=72+trainHeight+locoHeight;
+  const contentHeight=layout.reduce((n,g)=>n+(g.title==="Movement Identity"?0:24)+(g.timeline?55:0)+g.rows.reduce((a,r)=>a+r.height,0)+5,0);
+  const height=Math.max(675,contentTop+contentHeight+46);
+  canvas.width=1080;canvas.height=Math.ceil(height*2);ctx.scale(2,2);
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,540,height);
+  const gradient=ctx.createLinearGradient(12,0,528,65);gradient.addColorStop(0,"#ff792c");gradient.addColorStop(1,"#760e32");
+  ctx.fillStyle=gradient;rounded(ctx,margin,8,width,60,6);ctx.fill();
+  const title=entry.movementType==="arrival"&&entry.isDotTrain?"DOT MOVEMENT":
+    entry.movementType==="arrival"?"ARRIVAL MOVEMENT":entry.movementType==="shed_shunting"?"SHED SHUNTING":"DEPARTURE MOVEMENT";
+  ctx.fillStyle="#fff";ctx.font="800 23px Arial";ctx.fillText(title,24,35,492);
+  if(entry.date){ctx.font="600 12px Arial";ctx.fillText(longDate(entry.date),24,55,492);}
+  ctx.fillStyle="#760e32";ctx.font="800 19px Arial";ctx.textAlign="center";
+  trainLines.forEach((line,i)=>ctx.fillText(line,270,94+i*23,492));ctx.textAlign="left";
+  let y=72+trainHeight;
+  if(blocks.length) {
+    ctx.fillStyle="#790f30";ctx.fillRect(margin,y,width,64);
+    blocks.forEach(([label,value],i)=>{
+      const blockWidth=width/blocks.length,x=margin+i*blockWidth;
+      ctx.textAlign="center";ctx.fillStyle="#ffe7d4";ctx.font="700 9px Arial";ctx.fillText(label,x+blockWidth/2,y+17,blockWidth-16);
+      ctx.fillStyle="#fff";ctx.font="800 27px Arial";ctx.fillText(value,x+blockWidth/2,y+49,blockWidth-16);
+      if(i){ctx.strokeStyle="#bd8290";ctx.beginPath();ctx.moveTo(x,y+8);ctx.lineTo(x,y+56);ctx.stroke();}
+    });ctx.textAlign="left";y+=64;
   }
-  ctx.fillStyle=maroon;ctx.fillRect(44,height-39,468,25);
-  ctx.fillStyle="#fff8ef";ctx.font=`700 9px ${FONT}`;ctx.fillText("RAILWAY LOGBOOK",54,height-23);
-  ctx.textAlign="right";ctx.fillText(`LPS · ${clean(profile?.name)||"—"}`,502,height-23,320);ctx.textAlign="left";
+  if(logo){ctx.save();ctx.globalAlpha=.065;const size=320;ctx.drawImage(logo,110,Math.max(y+90,(height-size)/2),size,size);ctx.restore();}
+  function rule(x1,y1,x2,y2){ctx.strokeStyle="#c9cdd2";ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+  for(const group of layout){
+    if(group.title!=="Movement Identity"){
+      const strip=ctx.createLinearGradient(12,0,528,0);strip.addColorStop(0,"#e3e5e7");strip.addColorStop(1,"#f2f3f4");
+      ctx.fillStyle=strip;rounded(ctx,12,y,516,20,2);ctx.fill();
+      ctx.fillStyle="#760e32";ctx.font="800 11px Arial";
+      const label=group.title==="Departure Details"?"MOVEMENT TIMELINE":group.title==="Arrival Details"?"ARRIVAL TIMELINE":group.title.toUpperCase();
+      ctx.fillText(label,20,y+14,500);y+=24;
+    }
+    if(group.timeline){
+      const t=group.timeline;
+      ctx.fillStyle="#760e32";ctx.font="800 23px Arial";ctx.fillText(t.start,25,y+24,103);
+      ctx.textAlign="right";ctx.fillText(t.end,515,y+24,103);ctx.textAlign="left";
+      ctx.font="700 8px Arial";ctx.fillStyle="#303640";ctx.fillText(t.startLabel,25,y+42,110);
+      ctx.textAlign="right";ctx.fillText(t.endLabel,515,y+42,110);ctx.textAlign="left";
+      ctx.strokeStyle="#f77a31";ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(145,y+21);ctx.lineTo(395,y+21);ctx.stroke();
+      for(const x of [145,395]){ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(x,y+21,4,0,Math.PI*2);ctx.fill();ctx.stroke();}
+      if(logo)ctx.drawImage(logo,255,y+6,30,30);
+      y+=55;
+    }
+    for(const row of group.rows){
+      row.pair.forEach((f,i)=>{
+        const x=margin+i*half,cellWidth=f.fullWidth?width:half;
+        ctx.fillStyle="rgba(237,239,241,.60)";ctx.fillRect(x,y,f.stacked?cellWidth:100,row.height);
+        ctx.fillStyle="#29313d";ctx.font="700 8.5px Arial";
+        f.labels.forEach((line,j)=>ctx.fillText(line,x+7,y+14+j*10.5,f.stacked?236:91));
+        ctx.fillStyle=f.alert?"#be1926":"#182542";ctx.font=`700 11.5px ${FONT}`;
+        f.values.forEach((line,j)=>ctx.fillText(line,x+(f.stacked?7:108),y+(f.stacked?31:15)+j*14,f.stacked?236:f.fullWidth?398:140));
+        rule(x,y,x+cellWidth,y);rule(x,y,x,y+row.height);rule(x+cellWidth,y,x+cellWidth,y+row.height);
+        if(!f.stacked)rule(x+100,y,x+100,y+row.height);
+      });
+      rule(margin,y+row.height,margin+width,y+row.height);y+=row.height;
+    }
+    y+=5;
+  }
+  const footerY=height-34;ctx.fillStyle="#790f30";rounded(ctx,12,footerY,516,26,3);ctx.fill();
+  ctx.fillStyle="#fff";ctx.font="700 10px Arial";ctx.fillText("RAILWAY LOGBOOK",24,footerY+17);
+  if(clean(profile?.name)){ctx.textAlign="right";ctx.fillText("LPS · "+clean(profile.name),516,footerY+17,300);ctx.textAlign="left";}
 }
 function caption(entry) {
   if (entry.movementType === "arrival" && entry.isDotTrain) return `ARRIVAL TN: ${val(entry.trainNumber)}\nDEP TRAIN NUMBER: ${val(entry.dotTrainNumber)}`;
   return entry.movementType === "arrival" ? `ARRIVAL TN: ${val(entry.trainNumber)}` : `DEP TRAIN NUMBER: ${val(entry.trainNumber)}`;
 }
-function logoImage() { return new Promise((resolve) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => resolve(null); image.src = APP_LOGO; }); }
+async function logoImage() {
+  const { APP_LOGO } = await import("./shareLogo.js");
+  return new Promise((resolve) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => resolve(null); image.src = APP_LOGO; });
+}
 
 export async function openExportCard(entry, locomotives, options = {}) {
+  const { loadDiaryFont } = await import("./diaryFont.js");
   await loadDiaryFont();
   const profile = await DB.get("profile", "singleton"); const logo = await logoImage();
   const pages = paginate(detailSections(entry, locomotives)); const canvases = pages.map(() => el("canvas"));
@@ -282,7 +312,8 @@ export async function openExportCard(entry, locomotives, options = {}) {
   const share = el("button", { class:"primary-btn", type:"button", onclick: async () => {
     if (navigator.share && navigator.canShare && navigator.canShare({ files })) { try { await navigator.share({ files, title:"Railway Logbook", text }); return; } catch (error) { if (error.name === "AbortError") return; } }
     files.forEach((file) => { const url = URL.createObjectURL(file); const link = el("a",{href:url,download:file.name}); document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),5000); });
-  } }, "Share Diary Image");
+  } }, "Share Report Image");
   const done = el("button", { class:"final-done-btn", type:"button", onclick: async () => { done.disabled=true; try { if(typeof options.onDone === "function") await options.onDone(); overlay.remove(); } finally { done.disabled=false; } } }, options.doneLabel || "Done");
-  overlay.appendChild(el("div",{class:"overlay-card share-card-dialog"},[el("h2",{},"Share Duty Diary"),el("p",{},"Complete movement record · compact single-image duty diary"),preview,captionArea,copy,share,done])); document.body.appendChild(overlay);
+  overlay.appendChild(el("div",{class:"overlay-card share-card-dialog"},[el("h2",{},"Share Movement Report"),el("p",{},"Ticket-style movement report · single share image"),preview,captionArea,copy,share,done])); document.body.appendChild(overlay);
 }
+

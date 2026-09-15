@@ -11,11 +11,18 @@ import {
   newAdditionalLocomotive, newMinorSchedule, UICCableOption,
 } from "./models.js";
 import { AutosaveController, wireLifecycleFlush } from "./autosave.js";
-import { el, formatDate, formatTime, createTimeField, createDropdown, todayDateInputValue } from "./util.js";
+import { el, formatDate, formatTime, createTimeField, createDropdown as baseDropdown, todayDateInputValue } from "./util.js";
 import { openExportCard } from "./exportCard.js";
 import { openRangeReport } from "./rangeReport.js";
 import { showToast } from "./toast.js";
+import { scheduleOptions } from "./scheduleTypes.js";
 
+// Empty dropdown values stay empty and can be cleared without inventing report data.
+function createDropdown(options, value, onChange, attrs = {}) {
+  const select = baseDropdown(["", ...options.filter(v=>v !== "")], value || "", onChange, attrs);
+  select.options[0].textContent = "Select / Not entered";
+  return select;
+}
 let currentUnwireLifecycle = null;
 let resumePromptDismissedForSession = false;
 
@@ -25,7 +32,7 @@ function isEntryEmpty(entry) {
   if (entry.trainNumber || entry.trainName || entry.repairList || entry.remarks) return false;
   if (entry.shuntingTocTime || entry.shuntingTocPlace || entry.shuntingMovementUpto || entry.shuntingStableTime || entry.shuntingStablePlace || entry.shuntingCCName) return false;
   if (entry.locomotiveId || entry.locomotiveNumberSnapshot || entry.locomotiveType || entry.locomotiveShed) return false;
-  if (entry.locomotivePTType && entry.locomotivePTType !== PT_TYPE_OPTIONS[0]) return false;
+  if (entry.locomotivePTType) return false;
   if ((entry.additionalLocomotives || []).some((loco) =>
     loco.locomotiveNumberSnapshot || loco.locomotiveType || loco.locomotiveShed || loco.cabSelection ||
     (loco.ptType && loco.ptType !== PT_TYPE_OPTIONS[0])
@@ -36,23 +43,23 @@ function isEntryEmpty(entry) {
     (schedule.type && schedule.type !== MINOR_SCHEDULE_TYPE_OPTIONS[0])
   )) return false;
   if (entry.srMakeOther || entry.burMakeOther || entry.hogMakeOther || entry.spmMakeOther) return false;
-  if (entry.srMake && entry.srMake !== SR_BUR_MAKE_OPTIONS[0]) return false;
-  if (entry.burMake && entry.burMake !== SR_BUR_MAKE_OPTIONS[0]) return false;
-  if (entry.hogMake && entry.hogMake !== HOG_MAKE_OPTIONS[0]) return false;
-  if (entry.hogStatus && entry.hogStatus !== HOG_STATUS_OPTIONS[0]) return false;
+  if (entry.srMake) return false;
+  if (entry.burMake) return false;
+  if (entry.hogMake) return false;
+  if (entry.hogStatus) return false;
   if (entry.uicCableConnected && entry.uicCableConnected !== CABLE_CONNECTED_OPTIONS[0]) return false;
-  if (entry.rtisFitted && entry.rtisFitted !== FITTED_OPTIONS[0]) return false;
-  if (entry.rtisStatus && entry.rtisStatus !== RTIS_COMPONENT_STATUS_OPTIONS[0]) return false;
-  if (entry.acFitted && entry.acFitted !== FITTED_OPTIONS[0]) return false;
-  if (entry.acStatus && entry.acStatus !== AC_COMPONENT_STATUS_OPTIONS[0]) return false;
-  if (entry.kavachMake && entry.kavachMake !== KAVACH_MAKE_OPTIONS[0]) return false;
-  if (entry.kavachStatus && entry.kavachStatus !== KAVACH_STATUS_OPTIONS[0]) return false;
-  if (entry.brakeSystem && entry.brakeSystem !== BRAKE_SYSTEM_OPTIONS[0]) return false;
-  if (entry.spmMake && entry.spmMake !== SPM_MAKE_OPTIONS[0]) return false;
+  if (entry.rtisFitted) return false;
+  if (entry.rtisStatus) return false;
+  if (entry.acFitted) return false;
+  if (entry.acStatus) return false;
+  if (entry.kavachMake) return false;
+  if (entry.kavachStatus) return false;
+  if (entry.brakeSystem) return false;
+  if (entry.spmMake) return false;
   if (entry.mcStatus || entry.ubaDjOpen || entry.ubaDjClosed) return false;
   if (entry.locoTakeoverPlace || entry.locoOfferPlaceOther || entry.engineOnTrainPlace || entry.hogAttachedPlace) return false;
-  if (entry.locoOfferPlace && entry.locoOfferPlace !== LOCO_OFFER_PLACE_OPTIONS[0]) return false;
-  if (entry.bpFpPlace && entry.bpFpPlace !== BP_FP_PLACE_OPTIONS[0]) return false;
+  if (entry.locoOfferPlace) return false;
+  if (entry.bpFpPlace) return false;
   if (entry.bpFpPlaceOther || entry.yardSignal || entry.privateNumber || entry.yardMasterName || entry.pmName) return false;
   if ((entry.privateNumberDetails || []).some((detail) =>
     detail.signalNumber || detail.fromLine || detail.toLine || detail.departureTime || detail.yardMasterName || detail.pmName
@@ -845,15 +852,18 @@ async function showForm(container, setHeaderTitle, entryId) {
   }
   const editingSubmittedRecord = entry.isDraft !== true;
   if (![1, 2, 3, 4].includes(entry.draftPage)) entry.draftPage = 1;
-  if (!entry.locomotivePTType) entry.locomotivePTType = PT_TYPE_OPTIONS[0];
+  const savedScheduleTypes = await DB.getAll("scheduleTypes");
+  const majorOptions = scheduleOptions(savedScheduleTypes, "major", entry.majorScheduleTypeCode);
+  const minorOptions = scheduleOptions(savedScheduleTypes, "minor");
+  if (!entry.locomotivePTType) entry.locomotivePTType = "";
   if (!Array.isArray(entry.additionalLocomotives)) entry.additionalLocomotives = [];
-  if (!SR_BUR_MAKE_OPTIONS.includes(entry.srMake)) entry.srMake = SR_BUR_MAKE_OPTIONS[0];
-  if (!SR_BUR_MAKE_OPTIONS.includes(entry.burMake)) entry.burMake = SR_BUR_MAKE_OPTIONS[0];
-  if (!HOG_MAKE_OPTIONS.includes(entry.hogMake)) entry.hogMake = HOG_MAKE_OPTIONS[0];
-  if (!HOG_STATUS_OPTIONS.includes(entry.hogStatus)) entry.hogStatus = HOG_STATUS_OPTIONS[0];
+  if (!SR_BUR_MAKE_OPTIONS.includes(entry.srMake)) entry.srMake = "";
+  if (!SR_BUR_MAKE_OPTIONS.includes(entry.burMake)) entry.burMake = "";
+  if (!HOG_MAKE_OPTIONS.includes(entry.hogMake)) entry.hogMake = "";
+  if (!HOG_STATUS_OPTIONS.includes(entry.hogStatus)) entry.hogStatus = "";
   entry.uicStatus = uicDisplayStatus(entry);
   if (entry.hogMake === "NON HOG") entry.uicStatus = UICStatus.NON_HOG;
-  else if (!COMPONENT_UIC_OPTIONS.includes(entry.uicStatus)) entry.uicStatus = "Normal";
+  else if (!COMPONENT_UIC_OPTIONS.includes(entry.uicStatus)) entry.uicStatus = "";
   if (!CABLE_CONNECTED_OPTIONS.includes(entry.uicCableConnected)) {
     if (entry.uicCableOption === UICCableOption.ONE_CABLE) entry.uicCableConnected = "1 Cable";
     else if (entry.uicCableOption === UICCableOption.BOTH_CABLE) entry.uicCableConnected = "2 Cables";
@@ -862,14 +872,14 @@ async function showForm(container, setHeaderTitle, entryId) {
   if (entry.srMakeOther === undefined) entry.srMakeOther = "";
   if (entry.burMakeOther === undefined) entry.burMakeOther = "";
   if (entry.hogMakeOther === undefined) entry.hogMakeOther = "";
-  if (!FITTED_OPTIONS.includes(entry.rtisFitted)) entry.rtisFitted = FITTED_OPTIONS[0];
-  if (!RTIS_COMPONENT_STATUS_OPTIONS.includes(entry.rtisStatus)) entry.rtisStatus = RTIS_COMPONENT_STATUS_OPTIONS[0];
-  if (!FITTED_OPTIONS.includes(entry.acFitted)) entry.acFitted = FITTED_OPTIONS[0];
-  if (!AC_COMPONENT_STATUS_OPTIONS.includes(entry.acStatus)) entry.acStatus = AC_COMPONENT_STATUS_OPTIONS[0];
-  if (!KAVACH_MAKE_OPTIONS.includes(entry.kavachMake)) entry.kavachMake = KAVACH_MAKE_OPTIONS[0];
-  if (!KAVACH_STATUS_OPTIONS.includes(entry.kavachStatus)) entry.kavachStatus = KAVACH_STATUS_OPTIONS[0];
-  if (!BRAKE_SYSTEM_OPTIONS.includes(entry.brakeSystem)) entry.brakeSystem = BRAKE_SYSTEM_OPTIONS[0];
-  if (!SPM_MAKE_OPTIONS.includes(entry.spmMake)) entry.spmMake = SPM_MAKE_OPTIONS[0];
+  if (!FITTED_OPTIONS.includes(entry.rtisFitted)) entry.rtisFitted = "";
+  if (!RTIS_COMPONENT_STATUS_OPTIONS.includes(entry.rtisStatus)) entry.rtisStatus = "";
+  if (!FITTED_OPTIONS.includes(entry.acFitted)) entry.acFitted = "";
+  if (!AC_COMPONENT_STATUS_OPTIONS.includes(entry.acStatus)) entry.acStatus = "";
+  if (!KAVACH_MAKE_OPTIONS.includes(entry.kavachMake)) entry.kavachMake = "";
+  if (!KAVACH_STATUS_OPTIONS.includes(entry.kavachStatus)) entry.kavachStatus = "";
+  if (!BRAKE_SYSTEM_OPTIONS.includes(entry.brakeSystem)) entry.brakeSystem = "";
+  if (!SPM_MAKE_OPTIONS.includes(entry.spmMake)) entry.spmMake = "";
   if (entry.spmMakeOther === undefined) entry.spmMakeOther = "";
   if (entry.mcStatus === undefined) entry.mcStatus = "";
   if (entry.ubaDjOpen === undefined) entry.ubaDjOpen = "";
@@ -880,11 +890,11 @@ async function showForm(container, setHeaderTitle, entryId) {
   };
   entry.spareItems = { ...spareItemDefaults, ...(entry.spareItems || {}) };
   if (entry.locoTakeoverPlace === undefined) entry.locoTakeoverPlace = "";
-  if (!LOCO_OFFER_PLACE_OPTIONS.includes(entry.locoOfferPlace)) entry.locoOfferPlace = LOCO_OFFER_PLACE_OPTIONS[0];
+  if (!LOCO_OFFER_PLACE_OPTIONS.includes(entry.locoOfferPlace)) entry.locoOfferPlace = "";
   if (entry.locoOfferPlaceOther === undefined) entry.locoOfferPlaceOther = "";
   if (entry.engineOnTrainPlace === undefined) entry.engineOnTrainPlace = "";
   if (entry.hogAttachedPlace === undefined) entry.hogAttachedPlace = "";
-  if (!BP_FP_PLACE_OPTIONS.includes(entry.bpFpPlace)) entry.bpFpPlace = BP_FP_PLACE_OPTIONS[0];
+  if (!BP_FP_PLACE_OPTIONS.includes(entry.bpFpPlace)) entry.bpFpPlace = "";
   if (entry.bpFpPlaceOther === undefined) entry.bpFpPlaceOther = "";
   if (entry.yardSignal === undefined) entry.yardSignal = "";
   if (!Array.isArray(entry.privateNumberDetails)) {
@@ -915,7 +925,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   if (!Array.isArray(entry.officialDetails)) entry.officialDetails = [];
   for (const detail of entry.officialDetails) {
     if (!detail.id) detail.id = crypto.randomUUID();
-    if (!OFFICIAL_DESIGNATION_OPTIONS.includes(detail.designation)) detail.designation = OFFICIAL_DESIGNATION_OPTIONS[0];
+    if (detail.designation == null) detail.designation = "";
     if (detail.name === undefined) detail.name = "";
     if (detail.isComplete === undefined) detail.isComplete = true;
   }
@@ -938,7 +948,7 @@ async function showForm(container, setHeaderTitle, entryId) {
     if (entry[key] === undefined) entry[key] = "";
   }
   if (entry.repairList === undefined) entry.repairList = "";
-  if (!MAJOR_SCHEDULE_OPTIONS.includes(entry.majorScheduleTypeCode)) entry.majorScheduleTypeCode = MAJOR_SCHEDULE_OPTIONS[0];
+  if (entry.majorScheduleTypeCode == null) entry.majorScheduleTypeCode = "";
   if (!Array.isArray(entry.minorSchedules)) {
     const migratedSchedule = newMinorSchedule();
     migratedSchedule.date = entry.minorScheduleTIDate || null;
@@ -948,7 +958,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   if (entry.minorSchedules.length === 0) entry.minorSchedules.push(newMinorSchedule());
   for (const schedule of entry.minorSchedules) {
     if (!schedule.id) schedule.id = crypto.randomUUID();
-    if (!MINOR_SCHEDULE_TYPE_OPTIONS.includes(schedule.type)) schedule.type = MINOR_SCHEDULE_TYPE_OPTIONS[0];
+    if (schedule.type == null) schedule.type = "";
     if (schedule.date === undefined) schedule.date = null;
     if (schedule.km === undefined) schedule.km = null;
   }
@@ -958,9 +968,9 @@ async function showForm(container, setHeaderTitle, entryId) {
   const locomotiveHistory = buildLocomotiveHistory(allDutyEntries, locomotives, entry.id);
   const linkedLegacyLocomotive = locomotives.find((loco) => loco.id === entry.locomotiveId);
   if (!entry.locomotiveNumberSnapshot && linkedLegacyLocomotive) entry.locomotiveNumberSnapshot = normalizeLocomotiveNumber(linkedLegacyLocomotive.number);
-  if (!entry.locomotiveType && linkedLegacyLocomotive) entry.locomotiveType = linkedLegacyLocomotive.locoClass || "";
-  if (!entry.locomotiveShed && linkedLegacyLocomotive) entry.locomotiveShed = sanitizeShedCode(linkedLegacyLocomotive.shed);
-  if (!entry.locomotiveType && !entry.locomotiveShed && entry.locomotiveNumberSnapshot) {
+  if (entry.locomotiveType == null && linkedLegacyLocomotive) entry.locomotiveType = linkedLegacyLocomotive.locoClass || "";
+  if (entry.locomotiveShed == null && linkedLegacyLocomotive) entry.locomotiveShed = sanitizeShedCode(linkedLegacyLocomotive.shed);
+  if (entry.locomotiveType == null && entry.locomotiveShed == null && entry.locomotiveNumberSnapshot) {
     const remembered = locomotiveHistory.get(normalizeLocomotiveNumber(entry.locomotiveNumberSnapshot));
     if (remembered) {
       entry.locomotiveType = remembered.type;
@@ -1177,7 +1187,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       const role = locomotive.role === "dead" ? "dead" : "slave";
       roleCounts[role] += 1;
       const roleTitle = `${role === "dead" ? "Dead Loco" : "Slave Loco"} ${roleCounts[role]}`;
-      if (!locomotive.ptType) locomotive.ptType = PT_TYPE_OPTIONS[0];
+      if (locomotive.ptType == null) locomotive.ptType = "";
 
       const additionalRecallNote = el("div", { class: "loco-recall-note hidden" }, "Previous details found — type and shed filled.");
       const additionalTypeSelect = el("select", { "aria-label": `${roleTitle} type` });
@@ -1333,14 +1343,14 @@ async function showForm(container, setHeaderTitle, entryId) {
       return;
     }
     const selectedDate = new Date(`${entry.majorScheduleDate}T00:00:00`);
-    const today = new Date();
+    const today = new Date(`${entry.date}T00:00:00`);
     today.setHours(0, 0, 0, 0);
     const ninetyDaysAgo = new Date(today);
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     majorOverdueAlert.classList.toggle("hidden", selectedDate >= ninetyDaysAgo);
   }
 
-  const majorTypeSelect = createDropdown(MAJOR_SCHEDULE_OPTIONS, entry.majorScheduleTypeCode, (value) => {
+  const majorTypeSelect = createDropdown(majorOptions, entry.majorScheduleTypeCode, (value) => {
     entry.majorScheduleTypeCode = value;
     onFieldChange();
   }, { "aria-label": "Major schedule type" });
@@ -1418,7 +1428,7 @@ async function showForm(container, setHeaderTitle, entryId) {
         el("div", { class: "schedule-fields-grid minor-schedule-fields" }, [
           el("div", { class: "schedule-field" }, [
             fieldLabel("Type"),
-            createDropdown(MINOR_SCHEDULE_TYPE_OPTIONS, schedule.type, (value) => {
+            createDropdown([...new Set([...minorOptions, ...(schedule.type ? [schedule.type] : [])])], schedule.type, (value) => {
               schedule.type = value;
               onFieldChange();
             }, { "aria-label": `Minor schedule ${scheduleNumber} type` }),
@@ -1510,7 +1520,7 @@ async function showForm(container, setHeaderTitle, entryId) {
     createMakeField("SR Make", "srMake", "srMakeOther", SR_BUR_MAKE_OPTIONS),
     createMakeField("BUR Make", "burMake", "burMakeOther", SR_BUR_MAKE_OPTIONS),
   ]));
-  const componentUICSelect = createDropdown(COMPONENT_UIC_OPTIONS, COMPONENT_UIC_OPTIONS.includes(entry.uicStatus) ? entry.uicStatus : "Normal", (value) => {
+  const componentUICSelect = createDropdown(COMPONENT_UIC_OPTIONS, COMPONENT_UIC_OPTIONS.includes(entry.uicStatus) ? entry.uicStatus : "", (value) => {
     entry.uicStatus = value;
     entry.uicCableConnected = value === "Modified-1 Cable" ? "1 Cable" : "2 Cables";
     syncLegacyCableValue(entry.uicCableConnected);
@@ -1530,10 +1540,10 @@ async function showForm(container, setHeaderTitle, entryId) {
       entry.uicStatus = UICStatus.NON_HOG;
       entry.uicCableConnected = "HOG Not Connected";
     } else if (entry.uicStatus === UICStatus.NON_HOG) {
-      entry.uicStatus = "Normal";
+      entry.uicStatus = "";
       entry.uicCableConnected = CABLE_CONNECTED_OPTIONS[0];
     }
-    componentUICSelect.value = COMPONENT_UIC_OPTIONS.includes(entry.uicStatus) ? entry.uicStatus : "Normal";
+    componentUICSelect.value = COMPONENT_UIC_OPTIONS.includes(entry.uicStatus) ? entry.uicStatus : "";
     syncLegacyCableValue(entry.uicCableConnected);
   }
 
@@ -1581,6 +1591,12 @@ async function showForm(container, setHeaderTitle, entryId) {
   const rtisStatusField = createComponentDropdownField("RTIS Status", "rtisStatus", RTIS_COMPONENT_STATUS_OPTIONS);
   const acStatusField = createComponentDropdownField("AC Status", "acStatus", AC_COMPONENT_STATUS_OPTIONS);
   function renderFittedStatusFields() {
+    if (!entry.rtisFitted) entry.rtisStatus = "";
+    if (!entry.acFitted) entry.acStatus = "";
+    const rtisSelect = rtisStatusField.querySelector("select");
+    const acSelect = acStatusField.querySelector("select");
+    if (rtisSelect) rtisSelect.value = entry.rtisStatus;
+    if (acSelect) acSelect.value = entry.acStatus;
     rtisStatusField.classList.toggle("hidden", entry.rtisFitted === "Not Fitted");
     acStatusField.classList.toggle("hidden", entry.acFitted === "Not Fitted");
   }
@@ -2007,10 +2023,32 @@ async function showForm(container, setHeaderTitle, entryId) {
     officialsCount,
   ]);
 
+  const officialLists = [el("div", {class:"form-section"}), el("div", {class:"form-section"})];
+  trainLocoPage.appendChild(officialLists[0]);
+  remainingDetailsPage.appendChild(officialLists[1]);
+  function officialActions(official) {
+    return el("div", {style:"display:flex;gap:8px;margin-top:8px;"}, [
+      el("button",{type:"button",class:"secondary-btn","aria-label":"Edit official " + (official.name || ""),onclick:()=>openOfficialsPrompt(official.id)},"Edit"),
+      el("button",{type:"button",class:"secondary-btn","aria-label":"Delete official " + (official.name || ""),onclick:()=>{
+        if (!confirm("Remove this official from this movement?")) return;
+        entry.officialDetails = entry.officialDetails.filter(o=>o.id!==official.id);
+        onFieldChange(); renderOfficialsFab();
+        if (reviewSubmitPage.style.display !== "none") renderReviewPage();
+      }},"Delete"),
+    ]);
+  }
   function renderOfficialsFab() {
     const count = entry.officialDetails.length;
     officialsCount.textContent = String(count);
     officialsCount.classList.toggle("hidden", count === 0);
+    for (const list of officialLists) {
+      list.innerHTML = "";
+      list.classList.toggle("hidden", count === 0);
+      for (const official of entry.officialDetails) list.appendChild(el("div",{class:"form-row"},[
+        el("strong",{},[official.designation, official.name].filter(Boolean).join(" · ") || "Incomplete official"),
+        officialActions(official),
+      ]));
+    }
   }
 
   function recentOfficialNames(excludeId) {
@@ -2034,19 +2072,14 @@ async function showForm(container, setHeaderTitle, entryId) {
       .slice(0, 12);
   }
 
-  function openOfficialsPrompt() {
-    let official = entry.officialDetails.find((candidate) => candidate.isComplete !== true);
-    if (!official) {
-      official = {
+  function openOfficialsPrompt(officialId) {
+    const original = typeof officialId === "string" ? entry.officialDetails.find(o=>o.id===officialId) : null;
+    const official = original ? {...original} : {
         id: crypto.randomUUID(),
-        designation: OFFICIAL_DESIGNATION_OPTIONS[0],
+        designation: "",
         name: "",
         isComplete: false,
       };
-      entry.officialDetails.push(official);
-      renderOfficialsFab();
-      onFieldChange();
-    }
 
     const overlay = el("div", { class: "overlay" });
     const closeButton = el("button", {
@@ -2055,12 +2088,11 @@ async function showForm(container, setHeaderTitle, entryId) {
       "aria-label": "Close Add Officials",
       onclick: () => overlay.remove(),
     }, "×");
-    const officialNumber = entry.officialDetails.indexOf(official) + 1;
+    const officialNumber = original ? entry.officialDetails.indexOf(original) + 1 : entry.officialDetails.length + 1;
     const designationField = el("div", { class: "movement-detail-field" }, [
       fieldLabel("Designation"),
       createDropdown(OFFICIAL_DESIGNATION_OPTIONS, official.designation, (value) => {
         official.designation = value;
-        onFieldChange();
       }, { "aria-label": "Designation" }),
     ]);
     const officialNameHistoryId = `official-name-history-${entry.id}-${official.id}`;
@@ -2075,7 +2107,6 @@ async function showForm(container, setHeaderTitle, entryId) {
         "aria-label": "Official Name",
         oninput: (event) => {
           official.name = event.target.value;
-          onFieldChange();
         },
       }),
       el("datalist", { id: officialNameHistoryId }, recentOfficialNames(official.id).map((name) =>
@@ -2092,18 +2123,21 @@ async function showForm(container, setHeaderTitle, entryId) {
           return;
         }
         official.isComplete = true;
+        if (original) Object.assign(original, official);
+        else entry.officialDetails.push(official);
         onFieldChange();
         renderOfficialsFab();
+        if (reviewSubmitPage.style.display !== "none") renderReviewPage();
         overlay.remove();
-        showToast("Official saved for Step 3.");
+        showToast("Official saved.");
       },
     }, "Save Official");
 
     overlay.appendChild(el("div", { class: "overlay-card private-number-dialog officials-dialog" }, [
       el("div", { class: "private-number-dialog-header" }, [
         el("div", {}, [
-          el("h2", {}, "Add Officials"),
-          el("p", {}, `Official ${officialNumber} · will appear on Step 3`),
+          el("h2", {}, original ? "Edit Official" : "Add Official"),
+          el("p", {}, `Official ${officialNumber} · included in this movement`),
         ]),
         closeButton,
       ]),
@@ -2237,6 +2271,7 @@ async function showForm(container, setHeaderTitle, entryId) {
             reviewField("Designation", official.designation),
             reviewField("Name", official.name),
           ]),
+          officialActions(official),
         ]));
       });
     }
@@ -2319,3 +2354,4 @@ async function showForm(container, setHeaderTitle, entryId) {
   }, "← Train & Loco Details"));
   showWizardPage(entry.draftPage, false);
 }
+

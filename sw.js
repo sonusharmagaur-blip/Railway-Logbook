@@ -1,6 +1,6 @@
 // Service worker: caches the app shell so RailwayLogbook works fully offline.
 // Bump CACHE_NAME whenever any precached file changes so clients pick up the update.
-const CACHE_NAME = "railwaylogbook-v69";
+const CACHE_NAME = "railwaylogbook-v70";
 
 const PRECACHE_URLS = [
   "./",
@@ -16,6 +16,7 @@ const PRECACHE_URLS = [
   "./js/constants.js",
   "./js/dutyEntries.js",
   "./js/dutyAdjustments.js",
+  "./js/adjustmentUtils.js",
   "./js/scheduleTypes.js",
   "./js/settings.js",
   "./js/sheets.js",
@@ -24,9 +25,6 @@ const PRECACHE_URLS = [
   "./js/shareLogo.js",
   "./js/rangeReport.js",
   "./js/drive.js",
-  "./wap7-share-background.png",
-  "./wap7-share-background-clean.jpg",
-  "./wap7-watermark-transparent-v3.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png",
@@ -62,7 +60,7 @@ self.addEventListener("fetch", (event) => {
 
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
+      caches.match("./index.html").then(cached => cached || fetch(event.request)
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
@@ -70,7 +68,7 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./")))
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./"))))
     );
     return;
   }
@@ -90,3 +88,4 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+

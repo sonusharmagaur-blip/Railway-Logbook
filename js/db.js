@@ -96,6 +96,18 @@ async function saveWithLocoMaster(entries, dutyEntry) {
 }
 
 export const DB = {
+  async putMany(storeName, values) {
+    if (!values.length) return;
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, "readwrite");
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error || new Error("Batch save aborted"));
+      const store = transaction.objectStore(storeName);
+      for (const value of values) store.put(value);
+    });
+  },
   async rememberLocomotives(entries) {
     return saveWithLocoMaster(entries);
   },
@@ -130,3 +142,4 @@ export const DB = {
     return wrapRequest(store.count());
   },
 };
+

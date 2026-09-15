@@ -30,7 +30,7 @@ export const LOCOMOTIVE_TYPE_OPTIONS = ["WAP5", "WAP7", "WAG9", "WAP4", "DSL Loc
 export const CAB_OPTIONS = ["Cab-1", "Cab-2"];
 export const PT_TYPE_OPTIONS = ["Normal", "Both HRP", "PT-1 HRP", "PT-2 HRP"];
 export const MAJOR_SCHEDULE_OPTIONS = ["IA", "IB", "IC", "IOH", "POH", "MOH", "NC Loco"];
-export const MINOR_SCHEDULE_TYPE_OPTIONS = ["TI", "VC", "GC"];
+export const MINOR_SCHEDULE_TYPE_OPTIONS = ["TI", "VC", "GC", "STR"];
 export const SR_BUR_MAKE_OPTIONS = ["MEDHA", "BT", "ABB", "CG", "SIEMENS", "BHEL", "Other"];
 export const HOG_MAKE_OPTIONS = ["SIEMENS", "MEDHA", "BHEL", "ABB", "CG", "ALL", "NON HOG", "Other"];
 export const HOG_STATUS_OPTIONS = ["WKG", "Not WKG", "HOG-1 Faulty", "HOG-2 Faulty"];
@@ -42,7 +42,7 @@ export function uicDisplayStatus(entry) {
     return entry.uicCableConnected === "1 Cable" || entry.uicCableOption === UICCableOption.ONE_CABLE
       ? "Modified-1 Cable" : "Modified-Both Cable";
   }
-  return entry.uicStatus || "Normal";
+  return entry.uicStatus || "";
 }
 export const CABLE_CONNECTED_OPTIONS = ["2 Cables", "1 Cable", "HOG Not Connected"];
 export const FITTED_OPTIONS = ["Fitted", "Not Fitted"];
@@ -247,14 +247,14 @@ export function newAdditionalLocomotive(role) {
     locomotiveType: "",
     locomotiveShed: "",
     cabSelection: "",
-    ptType: PT_TYPE_OPTIONS[0],
+    ptType: "",
   };
 }
 
 export function newMinorSchedule() {
   return {
     id: uuid(),
-    type: MINOR_SCHEDULE_TYPE_OPTIONS[0],
+    type: "",
     date: null,
     km: null,
   };
@@ -281,33 +281,33 @@ export function newDutyEntry() {
     shuntingStablePlace: "",
     shuntingCCName: "",
     cabSelection: "",
-    locomotivePTType: PT_TYPE_OPTIONS[0],
+    locomotivePTType: "",
     additionalLocomotives: [],
     repairList: "",
     remarks: "",
-    uicStatus: UICStatus.NORMAL,
+    uicStatus: "",
     uicCableOption: null,
-    majorScheduleTypeCode: MAJOR_SCHEDULE_OPTIONS[0],
+    majorScheduleTypeCode: "",
     majorScheduleDate: null,
     minorSchedules: [newMinorSchedule()],
     minorScheduleTIDate: null,
     kmSinceLastSchedule: null,
-    srMake: SR_BUR_MAKE_OPTIONS[0],
+    srMake: "",
     srMakeOther: "",
-    burMake: SR_BUR_MAKE_OPTIONS[0],
+    burMake: "",
     burMakeOther: "",
-    hogMake: HOG_MAKE_OPTIONS[0],
+    hogMake: "",
     hogMakeOther: "",
-    hogStatus: HOG_STATUS_OPTIONS[0],
-    uicCableConnected: CABLE_CONNECTED_OPTIONS[0],
-    rtisFitted: FITTED_OPTIONS[0],
-    rtisStatus: RTIS_COMPONENT_STATUS_OPTIONS[0],
-    acFitted: FITTED_OPTIONS[0],
-    acStatus: AC_COMPONENT_STATUS_OPTIONS[0],
-    kavachMake: KAVACH_MAKE_OPTIONS[0],
-    kavachStatus: KAVACH_STATUS_OPTIONS[0],
-    brakeSystem: BRAKE_SYSTEM_OPTIONS[0],
-    spmMake: SPM_MAKE_OPTIONS[0],
+    hogStatus: "",
+    uicCableConnected: "",
+    rtisFitted: "",
+    rtisStatus: "",
+    acFitted: "",
+    acStatus: "",
+    kavachMake: "",
+    kavachStatus: "",
+    brakeSystem: "",
+    spmMake: "",
     spmMakeOther: "",
     mcStatus: "",
     ubaDjOpen: "",
@@ -324,11 +324,11 @@ export function newDutyEntry() {
       otherText: "",
     },
     locoTakeoverPlace: "",
-    locoOfferPlace: LOCO_OFFER_PLACE_OPTIONS[0],
+    locoOfferPlace: "",
     locoOfferPlaceOther: "",
     engineOnTrainPlace: "",
     hogAttachedPlace: "",
-    bpFpPlace: BP_FP_PLACE_OPTIONS[0],
+    bpFpPlace: "",
     bpFpPlaceOther: "",
     yardSignal: "",
     privateNumberDetails: [],
@@ -367,3 +367,4 @@ export function newProfile() {
 export function kmFieldLabel(entry) {
   return entry.minorScheduleTIDate ? "KM since last TI" : "KM since last major schedule";
 }
+

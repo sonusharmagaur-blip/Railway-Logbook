@@ -2,6 +2,7 @@ import { DB } from "./db.js";
 import { el, formatDate } from "./util.js";
 import { showToast } from "./toast.js";
 import { pullAdjustmentRecordsFromSheet, syncPendingAdjustmentRecords } from "./sheets.js";
+import { adjustmentKey, uniqueAdjustments, normalizedText, recentAdjustmentRange } from "./adjustmentUtils.js";
 
 const ADJUSTMENT_TYPES = ["Shift", "Link", "Rest", "Other"];
 
@@ -23,7 +24,7 @@ function newAdjustmentRow() {
     adjustmentTypeOther: "",
     originalPosition: "",
     adjustedPosition: "",
-    remark: "",
+    remark: "Staff Request",
   };
 }
 
@@ -66,14 +67,13 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
   const filters = el("div", { class: "form-section adjustment-filters" });
   filters.appendChild(el("div", { class: "form-section-title" }, "Search Saved Records"));
 
-  const staffFilter = el("select", { "aria-label": "Filter by staff name" }, [
-    el("option", { value: "" }, "Recent Records"),
-  ]);
+  const staffListId = "adjustment-staff-search";
+  const staffFilter = el("input", {type:"search",list:staffListId,placeholder:"Search or select staff name","aria-label":"Filter by staff name"});
   const filterNames = [...new Set([
     ...staffMembers.map((member) => member.name),
     ...allRecords.map((record) => record.staffName).filter(Boolean),
   ])].sort((a, b) => a.localeCompare(b));
-  for (const name of filterNames) staffFilter.appendChild(el("option", { value: name }, name));
+  addDatalist(filters, staffListId, filterNames);
 
   const dateFilter = el("input", {
     type: "date",
@@ -109,23 +109,32 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
   page.appendChild(filters);
 
   const resultSummary = el("div", { class: "adjustment-result-summary" });
+  let viewAll = false;
+  const rangeButton = el("button",{class:"secondary-btn",type:"button",onclick:()=>{
+    viewAll=!viewAll;renderRecords();
+  }},"View All Entries");
+  page.appendChild(rangeButton);
   const recordsHolder = el("div", { class: "adjustment-records" });
   page.appendChild(resultSummary);
   page.appendChild(recordsHolder);
 
   function renderRecords() {
-    const selectedName = staffFilter.value;
+    const selectedName = staffFilter.value.trim();
     const selectedDate = dateFilter.value;
-    let records = allRecords
-      .filter((record) => (!selectedName || record.staffName === selectedName) && (!selectedDate || record.date === selectedDate))
+    const range=recentAdjustmentRange();
+    let records = uniqueAdjustments(allRecords)
+      .filter((record) => (!selectedName || normalizedText(record.staffName) === normalizedText(selectedName)) && (!selectedDate || record.date === selectedDate))
+      .filter(record=>!selectedName || viewAll || selectedDate || record.date>=range.from && record.date<=range.to)
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || ""));
 
     const hasFilter = Boolean(selectedName || selectedDate);
+    rangeButton.classList.toggle("hidden", !selectedName);
+    rangeButton.textContent=viewAll ? "Show Last 3 Months" : "View All Entries";
     if (!hasFilter) records = records.slice(0, 10);
     if (selectedName && selectedDate) {
       resultSummary.textContent = `${records.length} record${records.length === 1 ? "" : "s"} for ${selectedName} on ${formatDate(selectedDate)}`;
     } else if (selectedName) {
-      resultSummary.textContent = `${records.length} record${records.length === 1 ? "" : "s"} for ${selectedName}`;
+      resultSummary.textContent = `${records.length} records for ${selectedName} · ${viewAll ? "All entries" : "Last 3 months"}`;
     } else if (selectedDate) {
       resultSummary.textContent = `${records.length} record${records.length === 1 ? "" : "s"} on ${formatDate(selectedDate)}`;
     } else {
@@ -137,6 +146,14 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
         ? "No records found for this staff member."
         : "No duty adjustment records yet. Tap + to add one."));
       return;
+    }
+    if (selectedName) {
+      const cellStyle="padding:8px 5px;border:1px solid #ddd;vertical-align:top;overflow-wrap:anywhere;";
+      const table=el("table",{style:"width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;","aria-label":"Staff adjustment history"});
+      table.appendChild(el("thead",{},el("tr",{},["Date","Type","Original","Adjusted","Remark"].map(label=>el("th",{style:cellStyle+"background:#f2ece6;text-align:left;"},label)))));
+      const body=el("tbody");
+      for(const record of records) body.appendChild(el("tr",{},[formatDate(record.date),displayAdjustmentType(record),record.originalPosition || "",record.adjustedPosition || "",record.remark || ""].map(value=>el("td",{style:cellStyle},value))));
+      table.appendChild(body); recordsHolder.appendChild(table); return;
     }
     for (const record of records) {
       recordsHolder.appendChild(el("article", { class: "adjustment-record-row" }, [
@@ -155,7 +172,8 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
     }
   }
 
-  staffFilter.addEventListener("change", renderRecords);
+  staffFilter.addEventListener("input", () => {viewAll=false;renderRecords();});
+  staffFilter.addEventListener("change", () => {viewAll=false;renderRecords();});
   dateFilter.addEventListener("change", renderRecords);
   renderRecords();
   container.appendChild(page);
@@ -280,13 +298,7 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
           ]),
           el("div", { class: "adjustment-field adjustment-remark-field" }, [
             el("label", {}, "Remark"),
-            el("input", {
-              type: "text",
-              list: remarkListId,
-              value: row.remark,
-              placeholder: "Enter or select recent",
-              oninput: (event) => { row.remark = event.target.value; },
-            }),
+            el("select", {"aria-label":`Row ${index+1} request remark`,onchange:(event)=>{row.remark=event.target.value;}}, ["Staff Request","Our Request"].map(value=>el("option",{value,...(row.remark===value?{selected:""}:{})},value))),
           ]),
         ]),
       ]);
@@ -308,7 +320,7 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
   formPage.appendChild(el("button", {
     class: "primary-btn adjustment-save-btn",
     type: "button",
-    onclick: async () => {
+    onclick: async (event) => {
       if (!staffMembers.length) {
         showToast("Add staff names in Settings first.");
         return;
@@ -319,7 +331,15 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
       }
       const batchId = crypto.randomUUID();
       const now = new Date().toISOString();
+      const saveButton=event.currentTarget;
+      if(saveButton.disabled)return;
+      saveButton.disabled=true;
+      let savedCount=0, skippedCount=0;
+      try {
+      const seen = new Set((await DB.getAll("adjustmentRecords")).map(adjustmentKey));
       for (const row of rows) {
+        const key=adjustmentKey(row);
+        if(seen.has(key)){skippedCount++;continue;}
         await DB.put("adjustmentRecords", {
           ...row,
           id: crypto.randomUUID(),
@@ -335,8 +355,9 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
           sheetSyncedTo: "",
           sheetSyncedAt: null,
         });
+        seen.add(key);savedCount++;
       }
-      let savedMessage = `${rows.length} adjustment record${rows.length === 1 ? "" : "s"} saved.`;
+      let savedMessage = `${savedCount} adjustment records saved.${skippedCount ? " " + skippedCount + " duplicates skipped." : ""}`;
       try {
         const syncResult = await syncPendingAdjustmentRecords({ interactive: true });
         if (syncResult.synced > 0) savedMessage = `${savedMessage} Google Sheet synced.`;
@@ -345,7 +366,9 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
       }
       showToast(savedMessage);
       await mountDutyAdjustmentTab(container, setHeaderTitle);
+      } catch(error) {showToast(error.message || "Could not save adjustments.");saveButton.disabled=false;}
     },
   }, "Save Adjustment Records"));
   container.appendChild(formPage);
 }
+

@@ -1,6 +1,7 @@
 import { DB } from "./db.js";
 import { Constants } from "./constants.js";
 import { getValidAccessToken } from "./drive.js";
+import { adjustmentKey } from "./adjustmentUtils.js";
 
 const SHEET_TITLE = "Duty Adjustments";
 const HEADER_ROW = [
@@ -126,6 +127,10 @@ function rowValues(record, syncedAt) {
     syncedAt,
   ];
 }
+function sheetRowRecord(values) {
+  const [id,date,staffName,type,originalPosition,adjustedPosition,remark] = values;
+  return {id,date,staffName,adjustmentType:type,originalPosition,adjustedPosition,remark};
+}
 
 export async function syncPendingAdjustmentRecords({ interactive = false } = {}) {
   const linked = await getLinkedSheet();
@@ -134,15 +139,22 @@ export async function syncPendingAdjustmentRecords({ interactive = false } = {})
   await ensureWorksheet(linked.id, token);
   const records = await DB.getAll("adjustmentRecords");
   const pending = records.filter((record) => record.sheetSyncedTo !== linked.id || record.sheetSyncStatus !== "synced");
+  const existingRange = encodeURIComponent(`'${SHEET_TITLE}'!A2:I`);
+  const existingResponse = await sheetsFetch(`spreadsheets/${encodeURIComponent(linked.id)}/values/${existingRange}`,token);
+  const existingRows = (await existingResponse.json()).values || [];
+  const existingIds = new Set(existingRows.map(v=>v[0]));
+  const existingKeys = new Set(existingRows.map(v=>adjustmentKey(sheetRowRecord(v))));
   let synced = 0;
   for (const record of pending) {
     const syncedAt = new Date().toISOString();
     const range = encodeURIComponent(`'${SHEET_TITLE}'!A:I`);
-    await sheetsFetch(
+    const key=adjustmentKey(record);
+    if(!existingIds.has(record.id) && !existingKeys.has(key)) await sheetsFetch(
       `spreadsheets/${encodeURIComponent(linked.id)}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
       token,
       { method: "POST", body: JSON.stringify({ values: [rowValues(record, syncedAt)] }) }
     );
+    existingIds.add(record.id);existingKeys.add(key);
     record.sheetSyncStatus = "synced";
     record.sheetSyncedTo = linked.id;
     record.sheetSyncedAt = syncedAt;
@@ -165,11 +177,15 @@ export async function pullAdjustmentRecordsFromSheet({ interactive = false } = {
   );
   const data = await response.json();
   const rows = Array.isArray(data.values) ? data.values : [];
-  const existingIds = new Set((await DB.getAll("adjustmentRecords")).map((record) => record.id));
+  const localRecords = await DB.getAll("adjustmentRecords");
+  const existingIds = new Set(localRecords.map(record=>record.id));
+  const existingKeys = new Set(localRecords.map(adjustmentKey));
   let imported = 0;
   for (const values of rows) {
     const [id, date, staffName, type, originalPosition, adjustedPosition, remark, savedAt, syncedAt] = values;
     if (!id || !date) continue;
+    const key=adjustmentKey(sheetRowRecord(values));
+    if (existingIds.has(id) || existingKeys.has(key)) continue;
     const knownType = ["Shift", "Link", "Rest"].includes(type);
     await DB.put("adjustmentRecords", {
       id,
@@ -187,7 +203,7 @@ export async function pullAdjustmentRecordsFromSheet({ interactive = false } = {
       sheetSyncedTo: linked.id,
       sheetSyncedAt: syncedAt || null,
     });
-    if (!existingIds.has(id)) imported += 1;
+    existingIds.add(id);existingKeys.add(key);imported += 1;
   }
   await DB.put("meta", { key: "lastAdjustmentSheetSyncAt", value: new Date().toISOString() });
   return { status: "pulled", imported, total: rows.length, url: linked.url };
@@ -204,3 +220,4 @@ export async function getLastSheetSyncAt() {
   const row = await DB.get("meta", "lastAdjustmentSheetSyncAt");
   return row ? row.value : null;
 }
+
