@@ -65,21 +65,20 @@ function detailSections(entry, locomotives) {
     item("Working Cab", entry.cabSelection), item("PT Type", entry.locomotivePTType),
   ];
   const components = [
-    item("SR Make", entry.srMake === "Other" ? entry.srMakeOther : entry.srMake),
-    item("BUR Make", entry.burMake === "Other" ? entry.burMakeOther : entry.burMake),
+    item("SR/BUR Make", [entry.srMake === "Other" ? entry.srMakeOther : entry.srMake, entry.burMake === "Other" ? entry.burMakeOther : entry.burMake].filter(v=>clean(v)).join(" / ")),
+    item("Brake System", entry.brakeSystem),
     item("HOG Make", entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake),
     item("HOG Status", entry.hogStatus),
     item("UIC Status", entry.uicStatus ? uicDisplayStatus(entry) : ""),
     item("RTIS", entry.rtisFitted === "Not Fitted" ? "Not Fitted" : entry.rtisStatus || entry.rtisFitted),
     item("AC", entry.acFitted === "Not Fitted" ? "Not Fitted" : entry.acStatus || entry.acFitted),
-    item("Brake System", entry.brakeSystem),
     item("Kavach Make", entry.kavachMake), item("Kavach Status", entry.kavachStatus),
     item("SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake),
     item("MC %", entry.mcStatus), item("UBA DJ Open", volts(entry.ubaDjOpen)), item("UBA DJ Closed", volts(entry.ubaDjClosed)),
     {...item("Spare Items", spareSummary(entry)), fullWidth:true},
   ];
   for (const field of components) {
-    if (["AC", "Brake System"].includes(field.label)) field.pairKey = "ac-brake";
+    if (["SR/BUR Make", "Brake System"].includes(field.label)) field.pairKey = "make-brake";
     if (["Kavach Make", "Kavach Status"].includes(field.label)) field.pairKey = "kavach";
     if (["SPM Make", "MC %"].includes(field.label)) field.pairKey = "spm";
     if (["UBA DJ Open", "UBA DJ Closed"].includes(field.label)) field.pairKey = "uba";
@@ -213,7 +212,8 @@ function prepareDiary(ctx, groups, entry = {}) {
 }
 function drawPage(canvas, groups, entry, profile, logo) {
   const ctx=canvas.getContext("2d"), margin=12, width=516, half=258;
-  const layout=prepareDiary(ctx,groups,entry);
+  const displayGroups=groups.map(g=>({...g,rows:g.rows.filter(f=>!["Working Cab","PT Type","AC","UIC Status","RTIS"].includes(f.label))}));
+  const layout=prepareDiary(ctx,displayGroups,entry);
   const train=joinDetails([entry.trainNumber,entry.trainName]);
   const dotTrain=joinDetails([entry.dotTrainNumber,entry.dotTrainName]);
   const headings=entry.movementType==="arrival"&&entry.isDotTrain?
@@ -225,7 +225,13 @@ function drawPage(canvas, groups, entry, profile, logo) {
   const identity=groups.find(g=>g.title==="Movement Identity")?.rows||[];
   const blocks=[["LOCO NUMBER","Loco Number"],["TYPE","Loco Type"],["SHED","Shed"]]
     .map(([label,key])=>[label,identity.find(f=>f.label===key)?.value]).filter(([,value])=>value&&value!=="—");
-  const locoHeight=blocks.length?64:0;
+  const cabBlocks=[["WORKING CAB","Working Cab"],["PANTO TYPE","PT Type"]]
+    .map(([label,key])=>[label,identity.find(f=>f.label===key)?.value]).filter(([,value])=>clean(value)&&value!=="—");
+  const fields=groups.flatMap(g=>g.rows);
+  const statuses=[["AC","AC"],["UIC","UIC Status"],["RTIS","RTIS"]]
+    .map(([label,key])=>[label,fields.find(f=>f.label===key)?.value]).filter(([,value])=>clean(value)&&value!=="—");
+  const bandHeight=(blocks.length?64:0)+(cabBlocks.length?36:0);
+  const locoHeight=bandHeight+(statuses.length?50:0);
   const contentTop=72+trainHeight+locoHeight;
   const contentHeight=layout.reduce((n,g)=>n+(g.title==="Movement Identity"?0:24)+(g.timeline?55:0)+g.rows.reduce((a,r)=>a+r.height,0)+5,0);
   const height=Math.max(675,contentTop+contentHeight+46);
@@ -240,14 +246,31 @@ function drawPage(canvas, groups, entry, profile, logo) {
   ctx.fillStyle="#760e32";ctx.font="800 19px Arial";ctx.textAlign="center";
   trainLines.forEach((line,i)=>ctx.fillText(line,270,94+i*23,492));ctx.textAlign="left";
   let y=72+trainHeight;
-  if(blocks.length) {
-    ctx.fillStyle="#790f30";ctx.fillRect(margin,y,width,64);
+  if(bandHeight) {
+    ctx.fillStyle="#790f30";ctx.fillRect(margin,y,width,bandHeight);
     blocks.forEach(([label,value],i)=>{
       const blockWidth=width/blocks.length,x=margin+i*blockWidth;
       ctx.textAlign="center";ctx.fillStyle="#ffe7d4";ctx.font="700 9px Arial";ctx.fillText(label,x+blockWidth/2,y+17,blockWidth-16);
       ctx.fillStyle="#fff";ctx.font="800 27px Arial";ctx.fillText(value,x+blockWidth/2,y+49,blockWidth-16);
       if(i){ctx.strokeStyle="#bd8290";ctx.beginPath();ctx.moveTo(x,y+8);ctx.lineTo(x,y+56);ctx.stroke();}
-    });ctx.textAlign="left";y+=64;
+    });ctx.textAlign="left";
+    if(cabBlocks.length){
+      const cabY=y+(blocks.length?64:0);
+      if(blocks.length){ctx.strokeStyle="#bd8290";ctx.beginPath();ctx.moveTo(24,cabY-2);ctx.lineTo(516,cabY-2);ctx.stroke();}
+      ctx.font="700 13px Arial";ctx.fillStyle="#fff";ctx.textAlign="center";
+      cabBlocks.forEach(([label,value],i)=>{const w=width/cabBlocks.length;ctx.fillText(label+"  ·  "+value,margin+w*(i+.5),cabY+21,w-20);});
+      ctx.textAlign="left";
+    }
+    y+=bandHeight;
+  }
+  if(statuses.length){
+    y+=6;ctx.fillStyle="#f7e7dc";rounded(ctx,margin,y,width,38,4);ctx.fill();
+    statuses.forEach(([label,value],i)=>{
+      const w=width/statuses.length,x=margin+i*w;
+      ctx.textAlign="center";ctx.fillStyle="#790f30";ctx.font="800 9px Arial";ctx.fillText(label,x+w/2,y+12);
+      ctx.fillStyle="#182542";ctx.font="700 11px Arial";ctx.fillText(value,x+w/2,y+28,w-14);
+      if(i){ctx.strokeStyle="#dcc3b4";ctx.beginPath();ctx.moveTo(x,y+7);ctx.lineTo(x,y+31);ctx.stroke();}
+    });ctx.textAlign="left";y+=44;
   }
   if(logo){ctx.save();ctx.globalAlpha=.065;const size=320;ctx.drawImage(logo,110,Math.max(y+90,(height-size)/2),size,size);ctx.restore();}
   function rule(x1,y1,x2,y2){ctx.strokeStyle="#c9cdd2";ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
