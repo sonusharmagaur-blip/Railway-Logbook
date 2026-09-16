@@ -27,6 +27,7 @@ let currentUnwireLifecycle = null;
 let resumePromptDismissedForSession = false;
 
 function isEntryEmpty(entry) {
+  if (entry.powerCarNumber || entry.arrivalPowerCarNumber) return false;
   if (entry.arrivalTakeoverHQ) return false;
   if (entry.isDotTrain || entry.dotTrainNumber || entry.dotTrainName) return false;
   if (["arrivalTime","arrivalAt","arrivalHogFromTime","arrivalHogToTime","arrivalTakeoverFrom","arrivalTakeoverTime","arrivalDepartureTime","arrivalSignalNumber","arrivalPlacedTime","arrivalPlace","arrivalDetachTime","arrivalPmName","arrivalYardDepartureTime","arrivalYardSignal","arrivalShedArrivalTime","arrivalLineNumber"].some((key) => entry[key])) return false;
@@ -1848,6 +1849,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       createMovementTimeField("HOG Time From", "arrivalHogFromTime"),
       createMovementTimeField("HOG Time To", "arrivalHogToTime"),
     ]));
+    timelineSection.appendChild(createMovementManualField("Power Car No.", "arrivalPowerCarNumber", "Enter power car number"));
     timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
       createMovementTimeField("Departure Time", "arrivalDepartureTime"),
       createMovementHistoryField("Signal Number", "arrivalSignalNumber", "Signal number"),
@@ -1891,6 +1893,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       createMovementTimeField("HOG Attached To", "hogAttachedToTime"),
       createMovementHistoryField("Place", "hogAttachedPlace"),
     ]));
+    departureSection.appendChild(createMovementManualField("Power Car No.", "powerCarNumber", "Enter power car number"));
     departureSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
       createMovementTimeField("BP/FP Buildup Time", "bpFpTime"),
       createMovementDropdownField("Place", "bpFpPlace", BP_FP_PLACE_OPTIONS, "bpFpPlaceOther"),
@@ -2229,6 +2232,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       { key: "arrivalAt", label: "Arrival At" },
       { key: "arrivalHogFromTime", label: "HOG Time From", time: true },
       { key: "arrivalHogToTime", label: "HOG Time To", time: true },
+      { key: "arrivalPowerCarNumber", label: "Power Car No." },
       { key: "arrivalTakeoverFrom", label: "Take Over From" },
       { key: "arrivalTakeoverHQ", label: "Take Over HQ" },
       { key: "arrivalTakeoverTime", label: "Take Over Time", time: true },
@@ -2252,6 +2256,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       ]));
       reviewDetails = reviewDetails.concat(TIMELINE_STEPS.filter((step) => entry[step.key]).map((step) => ({ ...step, label: "DOT · " + step.label, time: true })));
     }
+    if ((!isArrivalMovement || entry.isDotTrain) && entry.powerCarNumber) reviewDetails.push({key:"powerCarNumber",label:entry.isDotTrain?"DOT · Power Car No.":"Power Car No."});
     if (reviewDetails.length) {
       timelineSection.appendChild(el("div", { class: "review-grid" }, reviewDetails.map((field) =>
         reviewField(field.label, field.time ? formatTime(entry[field.key]) : entry[field.key])

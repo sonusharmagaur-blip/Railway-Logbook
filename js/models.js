@@ -328,6 +328,8 @@ export function newDutyEntry() {
     locoOfferPlaceOther: "",
     engineOnTrainPlace: "",
     hogAttachedPlace: "",
+    powerCarNumber: "",
+    arrivalPowerCarNumber: "",
     bpFpPlace: "",
     bpFpPlaceOther: "",
     yardSignal: "",

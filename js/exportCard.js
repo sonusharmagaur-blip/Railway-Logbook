@@ -98,6 +98,7 @@ function detailSections(entry, locomotives) {
   const arrival = [
     {...item("Arrival", atPlace(entry.arrivalTime,entry.arrivalAt)),pairKey:"arrival-hog"},
     {...item("HOG Detached Time", entry.arrivalHogFromTime&&entry.arrivalHogToTime?time(entry.arrivalHogFromTime)+"-"+time(entry.arrivalHogToTime):entry.arrivalHogFromTime?"FROM "+time(entry.arrivalHogFromTime):entry.arrivalHogToTime?"TO "+time(entry.arrivalHogToTime):""),pairKey:"arrival-hog"},
+    {...item("Power Car No.",entry.arrivalPowerCarNumber),fullWidth:true},
     {...item("Taken Over From",[entry.arrivalTakeoverFrom,entry.arrivalTakeoverHQ].filter(v=>clean(v)).join(" / ")),pairKey:"arrival-toc"},
     {...item("TOC Time",time(entry.arrivalTakeoverTime)),pairKey:"arrival-toc"},
     {...item([clean(entry.arrivalAt),"Dep Time"].filter(Boolean).join(" "),[entry.arrivalDepartureTime?time(entry.arrivalDepartureTime):"",clean(entry.arrivalSignalNumber)?"FROM SIGNAL "+clean(entry.arrivalSignalNumber):""].filter(Boolean).join(" ")),pairKey:"arrival-place"},
@@ -113,6 +114,7 @@ function detailSections(entry, locomotives) {
     {...item("Engine On Train", atPlace(entry.engineOnTrainTime, entry.engineOnTrainPlace)), pairKey:"offer-eot"},
     {...item("HOG Attached Time", [entry.hogAttachedTime && entry.hogAttachedToTime ? time(entry.hogAttachedTime)+"-"+time(entry.hogAttachedToTime) : entry.hogAttachedTime ? "FROM "+time(entry.hogAttachedTime) : entry.hogAttachedToTime ? "TO "+time(entry.hogAttachedToTime) : "", clean(entry.hogAttachedPlace) ? "@ "+clean(entry.hogAttachedPlace) : ""].filter(Boolean).join(" ")), pairKey:"hog-bpfp"},
     {...item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)), pairKey:"hog-bpfp"},
+    {...item("Power Car No.",entry.powerCarNumber),fullWidth:true},
     {...item("Yard Dep / Signal", [entry.departureTime ? time(entry.departureTime) : "", clean(entry.yardSignal) ? "FROM SIGNAL "+clean(entry.yardSignal) : ""].filter(Boolean).join(" ")), pairKey:"yard-placement"},
     {...item("Placement / Place", atPlace(entry.placementTime, clean(entry.placementPfNumber) ? (/^PF\b/i.test(clean(entry.placementPfNumber)) ? clean(entry.placementPfNumber) : "PF "+clean(entry.placementPfNumber)) : "")), pairKey:"yard-placement"},
     {...item("Continuity Time", time(entry.continuityTime)), pairKey:"continuity", always:true}, {...item("BPC Time", time(entry.bpcTime)), pairKey:"continuity", always:true},
