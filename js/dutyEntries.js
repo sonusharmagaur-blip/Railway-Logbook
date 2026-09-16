@@ -27,6 +27,7 @@ let currentUnwireLifecycle = null;
 let resumePromptDismissedForSession = false;
 
 function isEntryEmpty(entry) {
+  if (entry.arrivalTakeoverHQ) return false;
   if (entry.isDotTrain || entry.dotTrainNumber || entry.dotTrainName) return false;
   if (["arrivalTime","arrivalAt","arrivalHogFromTime","arrivalHogToTime","arrivalTakeoverFrom","arrivalTakeoverTime","arrivalDepartureTime","arrivalSignalNumber","arrivalPlacedTime","arrivalPlace","arrivalDetachTime","arrivalPmName","arrivalYardDepartureTime","arrivalYardSignal","arrivalShedArrivalTime","arrivalLineNumber"].some((key) => entry[key])) return false;
   if (entry.trainNumber || entry.trainName || entry.repairList || entry.remarks) return false;
@@ -68,7 +69,7 @@ function isEntryEmpty(entry) {
   if (entry.placementPfNumber || entry.madeOverChargeName || entry.madeOverChargeHQ) return false;
   if (entry.spareItems && (
     entry.spareItems.otherText ||
-    Object.entries(entry.spareItems).some(([key, value]) => key !== "otherText" && value === true)
+    entry.spareItems.other || Object.entries(entry.spareItems).some(([key, value]) => !["otherText","other"].includes(key) && value === false)
   )) return false;
   for (const step of TIMELINE_STEPS) {
     if (entry[step.key]) return false;
@@ -1035,6 +1036,14 @@ async function showForm(container, setHeaderTitle, entryId) {
     el("div", { style: "height:5px;background:var(--border);border-radius:999px;overflow:hidden;" }, [progressFill]),
   ]);
   const trainLocoPage = el("div", {});
+  let currentWizardPage = 1;
+  let dotToggleButton;
+  const cancelDot = el("button", {class:"secondary-btn",type:"button",style:"width:100%;margin-top:10px;",onclick:()=>{
+    entry.isDotTrain=false;
+    onFieldChange();
+    showWizardPage(currentWizardPage>=3?3:currentWizardPage);
+  }}, "Cancel DOT — Keep Arrival Only");
+  progressCard.appendChild(cancelDot);
   const remainingDetailsPage = el("div", { style: "display:none;" });
   const dotDeparturePage = el("div", { style: "display:none;" });
   const reviewSubmitPage = el("div", { style: "display:none;" });
@@ -1043,6 +1052,9 @@ async function showForm(container, setHeaderTitle, entryId) {
     const dot = entry.movementType === "arrival" && entry.isDotTrain === true;
     const total = dot ? 4 : 3;
     pageNumber = Math.min(pageNumber, total);
+    currentWizardPage=pageNumber;
+    cancelDot.style.display=dot?"block":"none";
+    if(dotToggleButton){dotToggleButton.textContent=dot?"DOT Train ✓ — Remove":"DOT Train";dotToggleButton.setAttribute("aria-pressed",String(dot));}
     trainLocoPage.style.display = pageNumber === 1 ? "block" : "none";
     remainingDetailsPage.style.display = pageNumber === 2 ? "block" : "none";
     dotDeparturePage.style.display = dot && pageNumber === 3 ? "block" : "none";
@@ -1067,6 +1079,28 @@ async function showForm(container, setHeaderTitle, entryId) {
   container.appendChild(reviewSubmitPage);
 
   // --- Trip Info ---
+  const trainNames = new Map();
+  const trainNameDates = new Map();
+  for(const row of await DB.getAll("meta")) if(row.key?.startsWith("train-name:")&&row.name){trainNames.set(row.number,row.name);trainNameDates.set(row.number,row.lastModified||"");}
+  for(const record of [...allDutyEntries].filter(r=>r.isDraft!==true).sort((a,b)=>(a.lastModified||a.date||"").localeCompare(b.lastModified||b.date||""))){
+    for(const [n,name] of [[record.trainNumber,record.trainName],...(record.isDotTrain?[[record.dotTrainNumber,record.dotTrainName]]:[])]){
+      const key=String(n||"").trim().toUpperCase(),stamp=record.lastModified||record.date||"";
+      if(key&&String(name||"").trim()&&stamp>=(trainNameDates.get(key)||"")){trainNames.set(key,String(name).trim().toUpperCase());trainNameDates.set(key,stamp);}
+    }
+  }
+  function trainInputs(numberKey,nameKey){
+    const nameInput=el("input",{type:"text",value:entry[nameKey]||"","aria-label":nameKey==="trainName"?"Train Name":"Departure Train Name",oninput:e=>{entry[nameKey]=e.target.value;onFieldChange();}});
+    const numberInput=el("input",{type:"text",value:entry[numberKey]||"","aria-label":numberKey==="trainNumber"?"Train Number":"Departure Train Number",oninput:e=>{
+      const previous=String(entry[numberKey]||"").trim().toUpperCase();
+      entry[numberKey]=e.target.value;
+      const match=trainNames.get(String(e.target.value).trim().toUpperCase());
+      if(match){entry[nameKey]=match;nameInput.value=match;}
+      else if(entry[nameKey]===trainNames.get(previous)){entry[nameKey]="";nameInput.value="";}
+      onFieldChange();
+    }});
+    return {numberInput,nameInput};
+  }
+  const mainTrainInputs=trainInputs("trainNumber","trainName");
   const tripSection = el("div", { class: "form-section" });
   tripSection.appendChild(el("div", { class: "form-section-title" }, "Trip Info"));
   tripSection.appendChild(el("div", { class: "form-row" }, [
@@ -1075,11 +1109,11 @@ async function showForm(container, setHeaderTitle, entryId) {
   ]));
   tripSection.appendChild(el("div", { class: "form-row" }, [
     fieldLabel("Train Number"),
-    el("input", { type: "text", value: entry.trainNumber || "", oninput: (e) => { entry.trainNumber = e.target.value; onFieldChange(); } }),
+    mainTrainInputs.numberInput,
   ]));
   tripSection.appendChild(el("div", { class: "form-row" }, [
     fieldLabel("Train Name"),
-    el("input", { type: "text", value: entry.trainName || "", oninput: (e) => { entry.trainName = e.target.value; onFieldChange(); } }),
+    mainTrainInputs.nameInput,
   ]));
   const locomotiveRow = el("div", { class: "form-row locomotive-row" });
   locomotiveRow.appendChild(fieldLabel("Locomotive", { class: "locomotive-heading" }));
@@ -1806,12 +1840,13 @@ async function showForm(container, setHeaderTitle, entryId) {
       createMovementHistoryField("Arrival At", "arrivalAt", "Station / place"),
     ]));
     timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
-      createMovementTimeField("HOG Time From", "arrivalHogFromTime"),
-      createMovementTimeField("HOG Time To", "arrivalHogToTime"),
+      createMovementHistoryField("Take Over From", "arrivalTakeoverFrom", "Name"),
+      createMovementHistoryField("Take Over HQ", "arrivalTakeoverHQ", "HQ"),
+      createMovementTimeField("Take Over Time", "arrivalTakeoverTime"),
     ]));
     timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
-      createMovementHistoryField("Take Over From", "arrivalTakeoverFrom", "Name / designation"),
-      createMovementTimeField("Take Over Time", "arrivalTakeoverTime"),
+      createMovementTimeField("HOG Time From", "arrivalHogFromTime"),
+      createMovementTimeField("HOG Time To", "arrivalHogToTime"),
     ]));
     timelineSection.appendChild(el("div", { class: "movement-detail-row two-fields" }, [
       createMovementTimeField("Departure Time", "arrivalDepartureTime"),
@@ -1887,11 +1922,12 @@ async function showForm(container, setHeaderTitle, entryId) {
   }, "+ Add Officials"));
   if (isArrivalMovement) {
     remainingDetailsPage.appendChild(timelineSection);
+    const dotInputs=trainInputs("dotTrainNumber","dotTrainName");
     dotDeparturePage.appendChild(el("div", { class: "form-section" }, [
       el("div", { class: "form-section-title" }, "DOT Departure Train"),
       el("div", { class: "movement-detail-row two-fields" }, [
-        createMovementManualField("Departure Train Number", "dotTrainNumber", "Train number"),
-        createMovementManualField("Departure Train Name", "dotTrainName", "Train name"),
+        el("div",{class:"movement-detail-field"},[fieldLabel("Departure Train Number"),dotInputs.numberInput]),
+        el("div",{class:"movement-detail-field"},[fieldLabel("Departure Train Name"),dotInputs.nameInput]),
       ]),
     ]));
     dotDeparturePage.appendChild(departureSection);
@@ -2194,6 +2230,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       { key: "arrivalHogFromTime", label: "HOG Time From", time: true },
       { key: "arrivalHogToTime", label: "HOG Time To", time: true },
       { key: "arrivalTakeoverFrom", label: "Take Over From" },
+      { key: "arrivalTakeoverHQ", label: "Take Over HQ" },
       { key: "arrivalTakeoverTime", label: "Take Over Time", time: true },
       { key: "arrivalDepartureTime", label: "Departure Time", time: true },
       { key: "arrivalSignalNumber", label: "Signal Number" },
@@ -2325,6 +2362,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       },
     }, entry.isDotTrain ? "DOT Train ✓ — Remove" : "DOT Train");
     remainingDetailsPage.appendChild(dotButton);
+    dotToggleButton=dotButton;
   }
   dotDeparturePage.appendChild(el("button", {
     class: "primary-btn", type: "button",

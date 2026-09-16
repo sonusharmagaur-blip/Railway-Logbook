@@ -96,14 +96,16 @@ function detailSections(entry, locomotives) {
     ...(minorEntries.length ? minorEntries.map(minorField) : [item("Minor Schedule", "—")]),
   ];
   const arrival = [
-    item("Arrival Time", time(entry.arrivalTime)), item("Arrival At", entry.arrivalAt),
-    item("HOG Time From", time(entry.arrivalHogFromTime)), item("HOG Time To", time(entry.arrivalHogToTime)),
-    item("Take Over From", entry.arrivalTakeoverFrom), item("Take Over Time", time(entry.arrivalTakeoverTime)),
-    item("Arrival Departure Time", time(entry.arrivalDepartureTime)), item("Arrival Signal", entry.arrivalSignalNumber),
-    item("Placed Time", time(entry.arrivalPlacedTime)), item("Place", entry.arrivalPlace),
-    item("Detach Time", time(entry.arrivalDetachTime)), item("PM Name", entry.arrivalPmName),
-    item("Dep Yard Time", time(entry.arrivalYardDepartureTime)), item("Dep Yard Signal", entry.arrivalYardSignal),
-    item("Shed Arrival Time", time(entry.arrivalShedArrivalTime)), item("Line No.", entry.arrivalLineNumber),
+    {...item("Arrival", atPlace(entry.arrivalTime,entry.arrivalAt)),pairKey:"arrival-hog"},
+    {...item("HOG Detached Time", entry.arrivalHogFromTime&&entry.arrivalHogToTime?time(entry.arrivalHogFromTime)+"-"+time(entry.arrivalHogToTime):entry.arrivalHogFromTime?"FROM "+time(entry.arrivalHogFromTime):entry.arrivalHogToTime?"TO "+time(entry.arrivalHogToTime):""),pairKey:"arrival-hog"},
+    {...item("Taken Over From",[entry.arrivalTakeoverFrom,entry.arrivalTakeoverHQ].filter(v=>clean(v)).join(" / ")),pairKey:"arrival-toc"},
+    {...item("TOC Time",time(entry.arrivalTakeoverTime)),pairKey:"arrival-toc"},
+    {...item([clean(entry.arrivalAt),"Dep Time"].filter(Boolean).join(" "),[entry.arrivalDepartureTime?time(entry.arrivalDepartureTime):"",clean(entry.arrivalSignalNumber)?"FROM SIGNAL "+clean(entry.arrivalSignalNumber):""].filter(Boolean).join(" ")),pairKey:"arrival-place"},
+    {...item("Placement Time",atPlace(entry.arrivalPlacedTime,entry.arrivalPlace)),pairKey:"arrival-place"},
+    {...item("Loco Detach",time(entry.arrivalDetachTime)),pairKey:"arrival-detach"},
+    {...item("By PM Sh:",entry.arrivalPmName),pairKey:"arrival-detach"},
+    {...item("Yard Dep",atPlace(entry.arrivalYardDepartureTime,entry.arrivalYardSignal)),pairKey:"arrival-shed"},
+    {...item("Shed Arrival",atPlace(entry.arrivalShedArrivalTime,entry.arrivalLineNumber)),pairKey:"arrival-shed"},
   ];
   const departure = [
     {...item("Loco Takeover / Place", atPlace(entry.locoTakeoverTime, entry.locoTakeoverPlace)), pairKey:"takeover-checked"}, {...item("Checked Upto Time", time(entry.locoCheckedUptoTime)), pairKey:"takeover-checked"},
@@ -277,7 +279,7 @@ function drawPage(canvas, groups, entry, profile, logo) {
       const strip=ctx.createLinearGradient(12,0,528,0);strip.addColorStop(0,"#e3e5e7");strip.addColorStop(1,"#f2f3f4");
       ctx.fillStyle=strip;rounded(ctx,12,y,516,20,2);ctx.fill();
       ctx.fillStyle="#760e32";ctx.font="800 11px Arial";
-      const label=group.title==="Departure Details"?"MOVEMENT TIMELINE":group.title==="Arrival Details"?"ARRIVAL TIMELINE":group.title.toUpperCase();
+      const label=group.title==="Departure Details"?(entry.isDotTrain?"DEPARTURE TRAIN":"MOVEMENT TIMELINE"):group.title==="Arrival Details"?(entry.isDotTrain?"ARRIVAL TRAIN":"ARRIVAL TIMELINE"):group.title.toUpperCase();
       ctx.fillText(label,20,y+14,500);y+=24;
     }
     if(group.timeline){

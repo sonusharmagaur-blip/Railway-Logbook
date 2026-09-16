@@ -82,11 +82,23 @@ function mergeLocoMasters(existing, entries) {
 async function saveWithLocoMaster(entries, dutyEntry) {
   const db = await openDB();
   return new Promise((resolve,reject) => {
-    const transaction = db.transaction(dutyEntry ? ["locomotives","dutyEntries"] : ["locomotives"], "readwrite");
+    const transaction = db.transaction(dutyEntry ? ["locomotives","dutyEntries","meta"] : ["locomotives","meta"], "readwrite");
     transaction.oncomplete = () => resolve(dutyEntry?.id);
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error || new Error("Loco master save aborted"));
     if (dutyEntry) transaction.objectStore("dutyEntries").put(dutyEntry);
+    const trains = new Map();
+    for (const e of entries.filter(e=>e.isDraft!==true).sort((a,b)=>(a.lastModified||a.date||"").localeCompare(b.lastModified||b.date||""))) {
+      for (const [number,name] of [[e.trainNumber,e.trainName],...(e.isDotTrain?[[e.dotTrainNumber,e.dotTrainName]]:[])]) {
+        const n=String(number||"").trim().toUpperCase(), text=String(name||"").trim().toUpperCase();
+        if(n&&text) trains.set(n,{key:"train-name:"+n,number:n,name:text,lastModified:e.lastModified||e.date||""});
+      }
+    }
+    const meta=transaction.objectStore("meta");
+    for(const record of trains.values()){
+      const old=meta.get(record.key);
+      old.onsuccess=()=>{if(!old.result||(old.result.lastModified||"")<=record.lastModified)meta.put(record);};
+    }
     const store = transaction.objectStore("locomotives");
     const request = store.getAll();
     request.onsuccess = () => {
