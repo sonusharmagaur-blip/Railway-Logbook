@@ -68,7 +68,7 @@ function detailSections(entry, locomotives) {
     item("SR/BUR Make", [entry.srMake === "Other" ? entry.srMakeOther : entry.srMake, entry.burMake === "Other" ? entry.burMakeOther : entry.burMake].filter(v=>clean(v)).join(" / ")),
     item("Brake System", entry.brakeSystem),
     {...item("HOG Status", [entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake, entry.hogStatus].filter(v=>clean(v)).join(" / ")),pairKey:"hog-power"},
-    {...item("Power Car Number", entry.movementType === "arrival" ? entry.arrivalPowerCarNumber : entry.powerCarNumber),pairKey:"hog-power"},
+    {...item("Power Car", entry.movementType === "arrival" ? entry.arrivalPowerCarNumber : entry.powerCarNumber),pairKey:"hog-power"},
     item("UIC Status", entry.uicStatus ? uicDisplayStatus(entry) : ""),
     item("RTIS", entry.rtisFitted === "Not Fitted" ? "Not Fitted" : entry.rtisStatus || entry.rtisFitted),
     item("AC", entry.acFitted === "Not Fitted" ? "Not Fitted" : entry.acStatus || entry.acFitted),
@@ -117,10 +117,10 @@ function detailSections(entry, locomotives) {
     {...item("Placement / Place", atPlace(entry.placementTime, clean(entry.placementPfNumber) ? (/^PF\b/i.test(clean(entry.placementPfNumber)) ? clean(entry.placementPfNumber) : "PF "+clean(entry.placementPfNumber)) : "")), pairKey:"yard-placement"},
     {...item("Continuity Time", time(entry.continuityTime)),pairKey:"continuity-bpc"},
     {...item("BPC Time", time(entry.bpcTime)),pairKey:"continuity-bpc"},
-    {...item("Made Over Charge / HQ", [entry.madeOverChargeName,entry.madeOverChargeHQ].filter(v=>clean(v)).join(" / ")),pairKey:"made-over"},
+    {...item("Made Over To", [entry.madeOverChargeName,entry.madeOverChargeHQ].filter(v=>clean(v)).join(" / ")),pairKey:"made-over"},
     {...item("Made Over Time", time(entry.madeOverChargeTime)),pairKey:"made-over"},
     {...item("Departure Time", time(entry.finalDepartureTime)), pairKey:"departure-power", always:true},
-    ...(isDot ? [{...item("Power Car Number",entry.powerCarNumber),pairKey:"departure-power"}] : []),
+    ...(isDot ? [{...item("Power Car",entry.powerCarNumber),pairKey:"departure-power"}] : []),
   ];
   const officials = (entry.officialDetails || []).filter(official => clean(official.name)).map((official, index) => item(`Official ${index + 1}`, joinDetails([official.designation, official.name])));
   const additional = (entry.additionalLocomotives || []).map((loco, index) => item(`Additional Loco ${index + 1}`, joinDetails([loco.locomotiveNumberSnapshot,loco.locomotiveType,loco.locomotiveShed,loco.cabSelection,loco.ptType])));
