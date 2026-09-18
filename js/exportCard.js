@@ -113,11 +113,11 @@ function detailSections(entry, locomotives) {
     {...item("Loco Offer", [atPlace(entry.locoOfferTime, offerPlace), entry.locoOfferDepartureTime ? "DEP " + time(entry.locoOfferDepartureTime) : ""].filter(Boolean).join(" ")), pairKey:"offer-eot"},
     {...item("Engine On Train", atPlace(entry.engineOnTrainTime, entry.engineOnTrainPlace)), pairKey:"offer-eot"},
     {...item("HOG Attached Time", [entry.hogAttachedTime && entry.hogAttachedToTime ? time(entry.hogAttachedTime)+"-"+time(entry.hogAttachedToTime) : entry.hogAttachedTime ? "FROM "+time(entry.hogAttachedTime) : entry.hogAttachedToTime ? "TO "+time(entry.hogAttachedToTime) : "", clean(entry.hogAttachedPlace) ? "@ "+clean(entry.hogAttachedPlace) : ""].filter(Boolean).join(" ")), pairKey:"hog-bpfp"},
-    {...item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)), pairKey:"hog-bpfp"},
-    {...item("Power Car No.",entry.powerCarNumber),fullWidth:true},
+    {...item("Power Car No.",entry.powerCarNumber),pairKey:"hog-bpfp"},
+    item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)),
     {...item("Yard Dep / Signal", [entry.departureTime ? time(entry.departureTime) : "", clean(entry.yardSignal) ? "FROM SIGNAL "+clean(entry.yardSignal) : ""].filter(Boolean).join(" ")), pairKey:"yard-placement"},
     {...item("Placement / Place", atPlace(entry.placementTime, clean(entry.placementPfNumber) ? (/^PF\b/i.test(clean(entry.placementPfNumber)) ? clean(entry.placementPfNumber) : "PF "+clean(entry.placementPfNumber)) : "")), pairKey:"yard-placement"},
-    {...item("Continuity Time", time(entry.continuityTime)), pairKey:"continuity", always:true}, {...item("BPC Time", time(entry.bpcTime)), pairKey:"continuity", always:true},
+    item("Continuity Time", [entry.continuityTime ? time(entry.continuityTime) : "", entry.bpcTime ? "BPC TIME: " + time(entry.bpcTime) : ""].filter(Boolean).join(" / ")),
     item("Made Over Charge", entry.madeOverChargeName), item("HQ", entry.madeOverChargeHQ), item("Made Over Time", time(entry.madeOverChargeTime)),
     {...item("Departure Time", time(entry.finalDepartureTime)), always:true},
   ];
@@ -201,11 +201,12 @@ function prepareDiary(ctx, groups, entry = {}) {
     const rows=pairs.map(pairFields=>{
       const pair=pairFields.map(f=>{
         const stacked=group.title==="Schedule Details";
+        const fullWidth=Boolean(f.fullWidth)||pairFields.length===1;
         ctx.font="700 8.5px Arial";
-        const labels=wrap(ctx,f.label.toUpperCase(),stacked?236:91);
+        const labels=wrap(ctx,f.label.toUpperCase(),stacked?(fullWidth?494:236):91);
         ctx.font=`700 11.5px ${FONT}`;
-        const values=stacked?[f.value]:wrap(ctx,f.value,f.fullWidth?398:140);
-        return {labels,values,stacked,fullWidth:f.fullWidth,alert:f.alert};
+        const values=stacked?[f.value]:wrap(ctx,f.value,fullWidth?398:140);
+        return {labels,values,stacked,fullWidth,alert:f.alert};
       });
       return {pair,height:Math.max(25,...pair.map(f=>f.stacked?40:Math.max(f.labels.length*10.5,f.values.length*14)+12))};
     });
@@ -300,9 +301,9 @@ function drawPage(canvas, groups, entry, profile, logo) {
         const x=margin+i*half,cellWidth=f.fullWidth?width:half;
         ctx.fillStyle="rgba(237,239,241,.60)";ctx.fillRect(x,y,f.stacked?cellWidth:100,row.height);
         ctx.fillStyle="#29313d";ctx.font="700 8.5px Arial";
-        f.labels.forEach((line,j)=>ctx.fillText(line,x+7,y+14+j*10.5,f.stacked?236:91));
+        f.labels.forEach((line,j)=>ctx.fillText(line,x+7,y+14+j*10.5,f.stacked?(f.fullWidth?494:236):91));
         ctx.fillStyle=f.alert?"#be1926":"#182542";ctx.font=`700 11.5px ${FONT}`;
-        f.values.forEach((line,j)=>ctx.fillText(line,x+(f.stacked?7:108),y+(f.stacked?31:15)+j*14,f.stacked?236:f.fullWidth?398:140));
+        f.values.forEach((line,j)=>ctx.fillText(line,x+(f.stacked?7:108),y+(f.stacked?31:15)+j*14,f.stacked?(f.fullWidth?494:236):f.fullWidth?398:140));
         rule(x,y,x+cellWidth,y);rule(x,y,x,y+row.height);rule(x+cellWidth,y,x+cellWidth,y+row.height);
         if(!f.stacked)rule(x+100,y,x+100,y+row.height);
       });
