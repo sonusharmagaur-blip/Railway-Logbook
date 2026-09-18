@@ -1,19 +1,7 @@
 import { DB } from "./db.js";
-import { UICStatus, kmFieldLabel, uicDisplayStatus } from "./models.js";
+import { uicDisplayStatus } from "./models.js";
 import { el, formatDate, formatTime } from "./util.js";
-
-
-
-
-
-const SCALE = 2;
-const CARD_WIDTH = 540;
-const CARD_HEIGHT = 675;
 const FONT = '"RailwayDiaryHand", "Segoe Print", cursive';
-const paper = "#fffaf0";
-const ink = "#3d1f1c";
-const maroon = "#7b1f1b";
-const gold = "#c99128";
 
 function val(value, fallback = "—") {
   return value === undefined || value === null || String(value).trim() === "" ? fallback : String(value).trim();
@@ -80,7 +68,6 @@ function detailSections(entry, locomotives) {
   for (const field of components) {
     if (["SR/BUR Make", "Brake System"].includes(field.label)) field.pairKey = "make-brake";
 
-    if (["SPM Make", "MC %"].includes(field.label)) field.pairKey = "spm";
     if (["UBA DJ Open", "UBA DJ Closed"].includes(field.label)) field.pairKey = "uba";
   }
   const minorEntries = (entry.minorSchedules || []).filter(m => m.type || m.date || m.km !== "" && m.km !== null && m.km !== undefined);
@@ -119,7 +106,7 @@ function detailSections(entry, locomotives) {
     {...item("BPC Time", time(entry.bpcTime)),pairKey:"continuity-bpc"},
     {...item("Made Over To", [entry.madeOverChargeName,entry.madeOverChargeHQ].filter(v=>clean(v)).join(" / ")),pairKey:"made-over"},
     {...item("Made Over Time", time(entry.madeOverChargeTime)),pairKey:"made-over"},
-    {...item("Departure Time", time(entry.finalDepartureTime)), pairKey:"departure-power", always:true},
+    {...item("Departure Time", time(entry.finalDepartureTime)), pairKey:"departure-power"},
     ...(isDot ? [{...item("Power Car",entry.powerCarNumber),pairKey:"departure-power"}] : []),
   ];
   const officials = (entry.officialDetails || []).filter(official => clean(official.name)).map((official, index) => item(`Official ${index + 1}`, joinDetails([official.designation, official.name])));
