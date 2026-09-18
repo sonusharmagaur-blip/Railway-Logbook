@@ -67,14 +67,15 @@ function detailSections(entry, locomotives) {
   const components = [
     item("SR/BUR Make", [entry.srMake === "Other" ? entry.srMakeOther : entry.srMake, entry.burMake === "Other" ? entry.burMakeOther : entry.burMake].filter(v=>clean(v)).join(" / ")),
     item("Brake System", entry.brakeSystem),
-    item("HOG Make", entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake),
-    item("HOG Status", entry.hogStatus),
+    {...item("HOG Make & Status", [entry.hogMake === "Other" ? entry.hogMakeOther : entry.hogMake, entry.hogStatus].filter(v=>clean(v)).join(" / ")),pairKey:"hog-power"},
+    {...item(isDot ? "Arrival Power Car No." : "Power Car No.", entry.movementType === "arrival" ? entry.arrivalPowerCarNumber : entry.powerCarNumber),pairKey:"hog-power"},
+    ...(isDot ? [item("Departure Power Car No.",entry.powerCarNumber)] : []),
     item("UIC Status", entry.uicStatus ? uicDisplayStatus(entry) : ""),
     item("RTIS", entry.rtisFitted === "Not Fitted" ? "Not Fitted" : entry.rtisStatus || entry.rtisFitted),
     item("AC", entry.acFitted === "Not Fitted" ? "Not Fitted" : entry.acStatus || entry.acFitted),
-    item("Kavach Make", entry.kavachMake), item("Kavach Status", entry.kavachStatus),
-    item("SPM Make", entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake),
-    item("MC %", entry.mcStatus), item("UBA DJ Open", volts(entry.ubaDjOpen)), item("UBA DJ Closed", volts(entry.ubaDjClosed)),
+    {...item("Kavach Make & Status", [entry.kavachMake,entry.kavachStatus].filter(v=>clean(v)).join(" / ")),pairKey:"kavach-spm"},
+    {...item("SPM Make / MC %", [entry.spmMake === "Other" ? entry.spmMakeOther : entry.spmMake, clean(entry.mcStatus) ? clean(entry.mcStatus).replace(/\s*%$/, "")+"%" : ""].filter(v=>clean(v)).join(" / ")),pairKey:"kavach-spm"},
+    item("UBA DJ Open", volts(entry.ubaDjOpen)), item("UBA DJ Closed", volts(entry.ubaDjClosed)),
     {...item("Spare Items", spareSummary(entry)), fullWidth:true},
   ];
   for (const field of components) {
@@ -98,7 +99,6 @@ function detailSections(entry, locomotives) {
   const arrival = [
     {...item("Arrival", atPlace(entry.arrivalTime,entry.arrivalAt)),pairKey:"arrival-hog"},
     {...item("HOG Detached Time", entry.arrivalHogFromTime&&entry.arrivalHogToTime?time(entry.arrivalHogFromTime)+"-"+time(entry.arrivalHogToTime):entry.arrivalHogFromTime?"FROM "+time(entry.arrivalHogFromTime):entry.arrivalHogToTime?"TO "+time(entry.arrivalHogToTime):""),pairKey:"arrival-hog"},
-    {...item("Power Car No.",entry.arrivalPowerCarNumber),fullWidth:true},
     {...item("Taken Over From",[entry.arrivalTakeoverFrom,entry.arrivalTakeoverHQ].filter(v=>clean(v)).join(" / ")),pairKey:"arrival-toc"},
     {...item("TOC Time",time(entry.arrivalTakeoverTime)),pairKey:"arrival-toc"},
     {...item([clean(entry.arrivalAt),"Dep Time"].filter(Boolean).join(" "),[entry.arrivalDepartureTime?time(entry.arrivalDepartureTime):"",clean(entry.arrivalSignalNumber)?"FROM SIGNAL "+clean(entry.arrivalSignalNumber):""].filter(Boolean).join(" ")),pairKey:"arrival-place"},
@@ -113,12 +113,13 @@ function detailSections(entry, locomotives) {
     {...item("Loco Offer", [atPlace(entry.locoOfferTime, offerPlace), entry.locoOfferDepartureTime ? "DEP " + time(entry.locoOfferDepartureTime) : ""].filter(Boolean).join(" ")), pairKey:"offer-eot"},
     {...item("Engine On Train", atPlace(entry.engineOnTrainTime, entry.engineOnTrainPlace)), pairKey:"offer-eot"},
     {...item("HOG Attached Time", [entry.hogAttachedTime && entry.hogAttachedToTime ? time(entry.hogAttachedTime)+"-"+time(entry.hogAttachedToTime) : entry.hogAttachedTime ? "FROM "+time(entry.hogAttachedTime) : entry.hogAttachedToTime ? "TO "+time(entry.hogAttachedToTime) : "", clean(entry.hogAttachedPlace) ? "@ "+clean(entry.hogAttachedPlace) : ""].filter(Boolean).join(" ")), pairKey:"hog-bpfp"},
-    {...item("Power Car No.",entry.powerCarNumber),pairKey:"hog-bpfp"},
-    item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)),
+    {...item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)),pairKey:"hog-bpfp"},
     {...item("Yard Dep / Signal", [entry.departureTime ? time(entry.departureTime) : "", clean(entry.yardSignal) ? "FROM SIGNAL "+clean(entry.yardSignal) : ""].filter(Boolean).join(" ")), pairKey:"yard-placement"},
     {...item("Placement / Place", atPlace(entry.placementTime, clean(entry.placementPfNumber) ? (/^PF\b/i.test(clean(entry.placementPfNumber)) ? clean(entry.placementPfNumber) : "PF "+clean(entry.placementPfNumber)) : "")), pairKey:"yard-placement"},
-    item("Continuity Time", [entry.continuityTime ? time(entry.continuityTime) : "", entry.bpcTime ? "BPC TIME: " + time(entry.bpcTime) : ""].filter(Boolean).join(" / ")),
-    item("Made Over Charge", entry.madeOverChargeName), item("HQ", entry.madeOverChargeHQ), item("Made Over Time", time(entry.madeOverChargeTime)),
+    {...item("Continuity Time", time(entry.continuityTime)),pairKey:"continuity-bpc"},
+    {...item("BPC Time", time(entry.bpcTime)),pairKey:"continuity-bpc"},
+    {...item("Made Over Charge / HQ", [entry.madeOverChargeName,entry.madeOverChargeHQ].filter(v=>clean(v)).join(" / ")),pairKey:"made-over"},
+    {...item("Made Over Time", time(entry.madeOverChargeTime)),pairKey:"made-over"},
     {...item("Departure Time", time(entry.finalDepartureTime)), always:true},
   ];
   const officials = (entry.officialDetails || []).filter(official => clean(official.name)).map((official, index) => item(`Official ${index + 1}`, joinDetails([official.designation, official.name])));
