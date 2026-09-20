@@ -60,7 +60,7 @@ export function stableControls(entry, onChange) {
   const other=el("input",{type:"text",value:entry.locoSecuredOther || "",placeholder:"Enter securing details","aria-label":"Loco secured other details",oninput:e=>{entry.locoSecuredOther=e.target.value;onChange();}});
   const select=el("select",{"aria-label":"Loco Secured",onchange:e=>{
     entry.locoSecured=e.target.value;other.hidden=entry.locoSecured!=="Other";onChange();
-  }}, ["","4 WW and Hand Brakes and MCE Off","Other"].map(value=>el("option",{value},value || "Select / Not entered")));
+  }}, ["","4 WW","Hand Brakes","MCE Off","4 WW and Hand Brakes and MCE Off","Other"].map(value=>el("option",{value},value || "Select / Not entered")));
   select.value=entry.locoSecured || "";other.hidden=entry.locoSecured!=="Other";
   const preview=el("div");
   const remove=el("button",{class:"secondary-btn",type:"button",onclick:async()=>{
