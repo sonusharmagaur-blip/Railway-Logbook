@@ -3,7 +3,7 @@
 // scheduleTypes, profile, meta
 
 const DB_NAME = "railwaylogbook";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise = null;
 
@@ -13,6 +13,8 @@ function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (event) => {
       const db = req.result;
+      // Device-only temporary photos are deliberately excluded from data backups.
+      if (!db.objectStoreNames.contains("stablePhotos")) db.createObjectStore("stablePhotos", {keyPath:"id"});
       if (!db.objectStoreNames.contains("locomotives")) {
         db.createObjectStore("locomotives", { keyPath: "id" });
       }
@@ -39,7 +41,7 @@ function openDB() {
         db.createObjectStore("meta", { keyPath: "key" });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => { req.result.onversionchange = () => { req.result.close(); dbPromise = null; }; resolve(req.result); };
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
@@ -140,6 +142,7 @@ export const DB = {
   },
 
   async delete(storeName, key) {
+    if (storeName === "dutyEntries") await this.delete("stablePhotos", key);
     const store = await tx(storeName, "readwrite");
     return wrapRequest(store.delete(key));
   },

@@ -256,6 +256,7 @@ export function newMinorSchedule() {
     id: uuid(),
     type: "",
     date: null,
+    place: "",
     km: null,
   };
 }
@@ -279,6 +280,8 @@ export function newDutyEntry() {
     shuntingMovementUpto: "",
     shuntingStableTime: null,
     shuntingStablePlace: "",
+    locoSecured: "",
+    locoSecuredOther: "",
     shuntingCCName: "",
     cabSelection: "",
     locomotivePTType: "",

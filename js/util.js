@@ -135,5 +135,12 @@ export function el(tag, attrs = {}, children = []) {
     if (child === null || child === undefined) continue;
     node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
   }
+  if (node.classList.contains("overlay-card") && !Array.from(node.querySelectorAll("button")).some(button=>button.textContent.trim()==="×")) {
+    const close = document.createElement("button");
+    close.type="button";close.className="dialog-close";close.textContent="×";
+    close.setAttribute("aria-label","Close dialog");
+    close.addEventListener("click",()=>node.closest(".overlay")?.remove());
+    node.prepend(close);
+  }
   return node;
 }

@@ -13,9 +13,9 @@ import {
 import { AutosaveController, wireLifecycleFlush } from "./autosave.js";
 import { el, formatDate, formatTime, createTimeField, createDropdown as baseDropdown, todayDateInputValue } from "./util.js";
 import { openExportCard } from "./exportCard.js";
-import { openRangeReport } from "./rangeReport.js";
 import { showToast } from "./toast.js";
 import { scheduleOptions } from "./scheduleTypes.js";
+import { stableControls, stablePhotoPreview, pruneStablePhotos } from "./stablePhotos.js";
 
 // Empty dropdown values stay empty and can be cleared without inventing report data.
 function createDropdown(options, value, onChange, attrs = {}) {
@@ -27,6 +27,7 @@ let currentUnwireLifecycle = null;
 let resumePromptDismissedForSession = false;
 
 function isEntryEmpty(entry) {
+  if (entry.locoSecured || entry.locoSecuredOther || entry.hasStablePhoto || entry.cabSelection) return false;
   if (entry.powerCarNumber || entry.arrivalPowerCarNumber) return false;
   if (entry.arrivalTakeoverHQ) return false;
   if (entry.isDotTrain || entry.dotTrainNumber || entry.dotTrainName) return false;
@@ -41,7 +42,7 @@ function isEntryEmpty(entry) {
   )) return false;
   if (entry.majorScheduleDate || (entry.majorScheduleTypeCode && entry.majorScheduleTypeCode !== MAJOR_SCHEDULE_OPTIONS[0])) return false;
   if ((entry.minorSchedules || []).some((schedule) =>
-    schedule.date || schedule.km !== null && schedule.km !== undefined ||
+    schedule.date || schedule.place || schedule.km !== null && schedule.km !== undefined ||
     (schedule.type && schedule.type !== MINOR_SCHEDULE_TYPE_OPTIONS[0])
   )) return false;
   if (entry.srMakeOther || entry.burMakeOther || entry.hogMakeOther || entry.spmMakeOther) return false;
@@ -205,6 +206,7 @@ function buildLocomotiveHistory(entries, locomotives, currentEntryId) {
 }
 
 export async function mountDutyTab(container, setHeaderTitle) {
+  await pruneStablePhotos();
   const entries = await DB.getAll("dutyEntries");
   const activeDraft = entries
     .filter((entry) => entry.isDraft === true && !isEntryEmpty(entry))
@@ -319,48 +321,46 @@ function openMovementTypePicker(container, setHeaderTitle) {
 }
 
 async function showList(container, setHeaderTitle) {
+  await pruneStablePhotos();
   if (currentUnwireLifecycle) { currentUnwireLifecycle(); currentUnwireLifecycle = null; }
   setHeaderTitle("Duty Log");
   container.innerHTML = "";
 
   let allEntries = await DB.getAll("dutyEntries");
-  allEntries.sort((a, b) => (b.lastModified || "").localeCompare(a.lastModified || "") || (b.date || "").localeCompare(a.date || ""));
+  allEntries.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.lastModified || "").localeCompare(a.lastModified || ""));
   const locomotives = await DB.getAll("locomotives");
   let filteredEntries = allEntries;
   let currentPageIndex = 0;
 
-  const toolbar = el("div", { class: "toolbar-row" }, [
-    el("button", { class: "secondary-btn", onclick: () => openRangeReport(allEntries) }, "Export range report"),
-  ]);
-  container.appendChild(toolbar);
+  // Date filtering below shares each original report individually.
 
   const filterCard = el("div", { class: "card" });
   const fromInput = el("input", { type: "date" });
   const toInput = el("input", { type: "date" });
   const searchInput = el("input", { type: "text", placeholder: "Search train no. / name / loco" });
+  fromInput.setAttribute("aria-label", "Movement from date");
+  toInput.setAttribute("aria-label", "Movement to date");
   filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("From"), fromInput]));
   filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("To"), toInput]));
   filterCard.appendChild(el("div", { class: "form-row" }, [fieldLabel("Search"), searchInput]));
-  // Keep the home screen compact: only recent entries are shown here.
+  const filterPanel = el("details", { class: "movement-filters" }, [el("summary", {}, "Search / Date range"), filterCard]);
+  container.appendChild(filterPanel);
+  fromInput.addEventListener("change", applyFilterAndRender);
+  toInput.addEventListener("change", applyFilterAndRender);
+  searchInput.addEventListener("input", applyFilterAndRender);
+  filterCard.appendChild(el("button", {class:"secondary-btn",type:"button",onclick:()=>{
+    fromInput.value="";toInput.value="";searchInput.value="";applyFilterAndRender();
+  }}, "Clear filters"));
 
   const listWrap = el("div", { class: "recent-duty-list" });
   container.appendChild(listWrap);
 
   function applyFilterAndRender() {
-    let filtered = allEntries;
-    if (fromInput.value) filtered = filtered.filter((e) => e.date >= fromInput.value);
-    if (toInput.value) filtered = filtered.filter((e) => e.date <= toInput.value);
-    const q = searchInput.value.trim().toLowerCase();
-    if (q) {
-      filtered = filtered.filter((e) =>
-        (e.trainNumber || "").toLowerCase().includes(q) ||
-        (e.trainName || "").toLowerCase().includes(q) ||
-        (e.locomotiveNumberSnapshot || "").toLowerCase().includes(q)
-      );
+    if (fromInput.value && toInput.value && fromInput.value > toInput.value) {
+      listWrap.replaceChildren(el("p", {role:"alert"}, "From date must be on or before To date."));
+      return;
     }
-    filteredEntries = filtered;
-    currentPageIndex = 0;
-    renderDiaryPage();
+    renderCompactList();
   }
 
   function detailValue(value) {
@@ -392,7 +392,7 @@ async function showList(container, setHeaderTitle) {
     const schedules = (entry.minorSchedules || []).filter((schedule) => schedule.type || schedule.date || schedule.km !== null && schedule.km !== undefined);
     if (!schedules.length) return "—";
     return schedules.map((schedule, index) => {
-      const details = [schedule.type, schedule.date ? formatDate(schedule.date) : "", schedule.km !== null && schedule.km !== undefined ? `${schedule.km} KM` : ""].filter(Boolean);
+      const details = [schedule.type, [schedule.date ? formatDate(schedule.date) : "",schedule.place ? "@ " + schedule.place : ""].filter(Boolean).join(" "), schedule.km !== null && schedule.km !== undefined ? `${schedule.km} KM` : ""].filter(Boolean);
       return `${index + 1}. ${details.join(" · ")}`;
     }).join(" | ");
   }
@@ -424,20 +424,25 @@ async function showList(container, setHeaderTitle) {
   function renderCompactList() {
     setHeaderTitle("Duty Log");
     listWrap.innerHTML = "";
-    const recentEntries = allEntries.slice(0, 4);
+    const hasFilter = Boolean(fromInput.value || toInput.value || searchInput.value.trim());
+    const q = searchInput.value.trim().toLowerCase();
+    const matches = allEntries.filter(e => (!fromInput.value || e.date >= fromInput.value) && (!toInput.value || e.date <= toInput.value) &&
+      (!q || [e.trainNumber,e.trainName,e.dotTrainNumber,e.dotTrainName,e.locomotiveNumberSnapshot].some(v=>String(v||"").toLowerCase().includes(q))));
+    const recentEntries = hasFilter ? matches : allEntries.slice(0, 7);
     listWrap.appendChild(el("div", { class: "recent-duty-heading" }, [
-      el("span", {}, "Recent Movements"),
+      el("span", {}, hasFilter ? "Matching Movements" : "Recent Movements"),
       el("span", {}, `${recentEntries.length} shown`),
     ]));
     if (!recentEntries.length) {
-      listWrap.appendChild(el("div", { class: "empty-state" }, "No duty entries yet. Tap + to add one."));
+      listWrap.appendChild(el("div", { class: "empty-state" }, hasFilter ? "No movements match this date range / search." : "No duty entries yet. Tap + to add one."));
       return;
     }
     for (const entry of recentEntries) {
       const badges = [];
       if (entry.isDraft === true) badges.push(el("span", { class: "badge warn" }, "Draft"));
       badges.push(el("span", { class: "badge" }, compactMovementLabel(entry)));
-      listWrap.appendChild(el("button", {
+      const recordCard = el("div", {class:"movement-list-record"});
+      recordCard.appendChild(el("button", {
         class: "card recent-duty-card",
         type: "button",
         onclick: () => openEntryDetail(entry),
@@ -449,6 +454,8 @@ async function showList(container, setHeaderTitle) {
         ]),
         el("span", { class: "recent-duty-open", "aria-hidden": "true" }, "›"),
       ]));
+      recordCard.appendChild(actionButton("Share", "share", () => openExportCard(entry, locomotives)));
+      listWrap.appendChild(recordCard);
     }
   }
 
@@ -467,7 +474,7 @@ async function showList(container, setHeaderTitle) {
       class: "secondary-btn duty-detail-back",
       type: "button",
       onclick: renderCompactList,
-    }, "← Recent Movements");
+    }, "× Back to Movements");
   }
 
   function renderShedShuntingDetail(entry) {
@@ -506,6 +513,7 @@ async function showList(container, setHeaderTitle) {
       }, "danger"),
     ]));
     listWrap.appendChild(page);
+    stablePhotoPreview(entry).then(photo=>{if(photo && page.isConnected)page.appendChild(photo);});
   }
 
   function renderDiaryPage(showBackButton = false) {
@@ -606,7 +614,7 @@ async function showList(container, setHeaderTitle) {
 
     const officialRows = (entry.officialDetails || [])
       .filter((official) => official.designation || official.name)
-      .map((official, index) => [`Official ${index + 1}`, [official.designation, official.name].filter(Boolean).join(" · ")]);
+      .map(official => [official.designation || "Official", official.name]);
     page.appendChild(diarySection("Officials", officialRows));
     page.appendChild(diarySection("Repair List", [["Repair List", entry.repairList || "No repairs recorded"]]));
     page.appendChild(diarySection("Remarks", [["Remarks", entry.remarks || "No remarks"]]));
@@ -626,6 +634,7 @@ async function showList(container, setHeaderTitle) {
     ]);
     page.appendChild(actionRow);
     listWrap.appendChild(page);
+    stablePhotoPreview(entry).then(photo=>{if(photo && page.isConnected)page.appendChild(photo);});
 
     const previousButton = el("button", {
       class: "secondary-btn diary-nav-btn",
@@ -804,6 +813,7 @@ async function showShedShuntingForm(container, setHeaderTitle, entry) {
     el("div", { class: "shunting-field" }, [fieldLabel("Stable Time"), stableTimeHolder]),
     suggestionInput("Stable Place", "shuntingStablePlace", "Enter or select recent"),
   ]));
+  section.appendChild(stableControls(entry, onFieldChange));
   section.appendChild(el("div", { class: "form-row" }, [
     el("div", { class: "shunting-field" }, [
       fieldLabel("CC Name"),
@@ -995,6 +1005,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   }
 
   async function openSubmissionShare() {
+    if (!entry.cabSelection) { showToast("Please choose Working Cab in Step 1."); showWizardPage(1); return; }
     await autosave.flush();
     await openExportCard(entry, locomotives, {
       doneLabel: editingSubmittedRecord ? "Done" : "Done & Finish Movement",
@@ -1194,12 +1205,14 @@ async function showForm(container, setHeaderTitle, entryId) {
   renderTypeControl();
 
   const cabSelect = el("select", { onchange: (e) => { entry.cabSelection = e.target.value; onFieldChange(); } });
-  cabSelect.appendChild(el("option", { value: "", disabled: "" }, "Select cab"));
+  cabSelect.appendChild(el("option", { value: "" }, "Select cab"));
   for (const cab of CAB_OPTIONS) {
     const option = el("option", { value: cab }, cab);
     if (entry.cabSelection === cab) option.selected = true;
     cabSelect.appendChild(option);
   }
+  cabSelect.value = entry.cabSelection || "";
+  cabSelect.setAttribute("aria-label", "Working Cab");
 
   const ptTypeSelect = createDropdown(PT_TYPE_OPTIONS, entry.locomotivePTType, (value) => {
     entry.locomotivePTType = value;
@@ -1283,12 +1296,13 @@ async function showForm(container, setHeaderTitle, entryId) {
           onFieldChange();
         },
       });
-      additionalCabSelect.appendChild(el("option", { value: "", disabled: "" }, "Select cab"));
+      additionalCabSelect.appendChild(el("option", { value: "" }, "Select cab"));
       for (const cab of CAB_OPTIONS) {
         const option = el("option", { value: cab }, cab);
         if (locomotive.cabSelection === cab) option.selected = true;
         additionalCabSelect.appendChild(option);
       }
+      additionalCabSelect.value = locomotive.cabSelection || "";
 
       const additionalPTTypeSelect = createDropdown(PT_TYPE_OPTIONS, locomotive.ptType, (value) => {
         locomotive.ptType = value;
@@ -1482,6 +1496,10 @@ async function showForm(container, setHeaderTitle, entryId) {
             }),
           ]),
           el("div", { class: "schedule-field" }, [fieldLabel("KM"), kmInput, kmAlert]),
+          el("div", { class: "schedule-field" }, [fieldLabel("Place"), el("input", {
+            type:"text",value:schedule.place || "",placeholder:"Place","aria-label":`Minor schedule ${scheduleNumber} place`,
+            oninput:event=>{schedule.place=event.target.value;onFieldChange();},
+          })]),
         ]),
       ]);
       minorSchedulesHolder.appendChild(scheduleCard);
@@ -1735,7 +1753,7 @@ async function showForm(container, setHeaderTitle, entryId) {
   trainLocoPage.appendChild(el("button", {
     class: "primary-btn",
     type: "button",
-    onclick: () => showWizardPage(2),
+    onclick: () => { if (!entry.cabSelection) {showToast("Please choose Working Cab.");cabSelect.focus();return;} showWizardPage(2); },
   }, isArrivalMovement ? "Next: Arrival Details →" : "Next: Movement Details →"));
 
   // --- Timeline of Working ---
@@ -1870,6 +1888,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       createMovementTimeField("Shed Arrival Time", "arrivalShedArrivalTime"),
       createMovementHistoryField("Line No.", "arrivalLineNumber", "Line number"),
     ]));
+    timelineSection.appendChild(stableControls(entry, onFieldChange));
   }
   const departureSection = el("div", { class: "form-section" }, [
     el("div", { class: "form-section-title" }, "Departure Details"),
@@ -1918,11 +1937,6 @@ async function showForm(container, setHeaderTitle, entryId) {
   departureSection.appendChild(el("div", { class:"movement-detail-row" }, [
     createMovementTimeField("Final Dep Time", "finalDepartureTime"),
   ]));
-  departureSection.appendChild(el("button", {
-    class:"secondary-btn officials-inline-btn", type:"button",
-    "aria-label":"Add Officials to movement",
-    onclick: () => openOfficialsPrompt(),
-  }, "+ Add Officials"));
   if (isArrivalMovement) {
     remainingDetailsPage.appendChild(timelineSection);
     const dotInputs=trainInputs("dotTrainNumber","dotTrainName");
@@ -2197,6 +2211,10 @@ async function showForm(container, setHeaderTitle, entryId) {
     "aria-label":"Add Officials in Step 1",
     onclick: () => openOfficialsPrompt(),
   }, "+ Add Officials"));
+  function addOfficialsButton() {
+    return el("button", {class:"secondary-btn officials-inline-btn",type:"button",
+      "aria-label":"Add Officials on this step",onclick:()=>openOfficialsPrompt()}, "+ Add Officials");
+  }
 
 
   function reviewField(label, value) {
@@ -2340,6 +2358,7 @@ async function showForm(container, setHeaderTitle, entryId) {
       }, entry.remarks || ""),
     ]));
     reviewSubmitPage.appendChild(remarksSection);
+    reviewSubmitPage.appendChild(addOfficialsButton());
     reviewSubmitPage.appendChild(el("button", {
       class: "primary-btn",
       type: "button",
@@ -2369,6 +2388,7 @@ async function showForm(container, setHeaderTitle, entryId) {
     remainingDetailsPage.appendChild(dotButton);
     dotToggleButton=dotButton;
   }
+  dotDeparturePage.appendChild(addOfficialsButton());
   dotDeparturePage.appendChild(el("button", {
     class: "primary-btn", type: "button",
     onclick: () => {
@@ -2383,6 +2403,7 @@ async function showForm(container, setHeaderTitle, entryId) {
     class: "secondary-btn", type: "button", style: "width:100%;margin-top:10px;",
     onclick: () => showWizardPage(2),
   }, "← Arrival Details"));
+  remainingDetailsPage.appendChild(addOfficialsButton());
   remainingDetailsPage.appendChild(el("button", {
     class: "primary-btn",
     type: "button",

@@ -2,6 +2,7 @@ import { DB } from "./db.js";
 import { DEFAULT_SCHEDULE_TYPES, DEFAULT_STAFF_NAMES, newProfile } from "./models.js";
 import { mountDutyTab } from "./dutyEntries.js";
 import { attemptOpportunisticBackup, createLocalDailySnapshot } from "./drive.js";
+import { pruneStablePhotos } from "./stablePhotos.js";
 
 const viewContainer = document.getElementById("view-container");
 const headerTitle = document.getElementById("header-title");
@@ -84,6 +85,9 @@ async function requestPersistentStorage() {
 }
 
 function wireDataProtection() {
+  window.addEventListener("focus", () => pruneStablePhotos().catch(console.warn));
+  // Expire photos while the app stays open as well as on the next launch.
+  setInterval(() => pruneStablePhotos().catch(console.warn), 60 * 60 * 1000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       createLocalDailySnapshot();

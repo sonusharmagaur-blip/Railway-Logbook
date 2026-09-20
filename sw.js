@@ -1,8 +1,9 @@
 // Service worker: caches the app shell so RailwayLogbook works fully offline.
 // Bump CACHE_NAME whenever any precached file changes so clients pick up the update.
-const CACHE_NAME = "railwaylogbook-v86";
+const CACHE_NAME = "railwaylogbook-v87";
 
 const PRECACHE_URLS = [
+  "./js/stablePhotos.js",
   "./",
   "./index.html",
   "./manifest.webmanifest",

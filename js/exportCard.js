@@ -70,13 +70,13 @@ function detailSections(entry, locomotives) {
 
     if (["UBA DJ Open", "UBA DJ Closed"].includes(field.label)) field.pairKey = "uba";
   }
-  const minorEntries = (entry.minorSchedules || []).filter(m => m.type || m.date || m.km !== "" && m.km !== null && m.km !== undefined);
+  const minorEntries = (entry.minorSchedules || []).filter(m => m.type || m.date || m.place || m.km !== "" && m.km !== null && m.km !== undefined);
   if (!minorEntries.length && (entry.minorScheduleTIDate || entry.kmSinceLastSchedule != null)) {
     minorEntries.push({type:"TI",date:entry.minorScheduleTIDate,km:entry.kmSinceLastSchedule});
   }
   const minorField = (schedule,index) => ({ ...item(
     "Minor Schedule" + (index ? " " + (index+1) : ""),
-    joinDetails([schedule.type, date(schedule.date), schedule.km != null && schedule.km !== "" ? "KM-" + schedule.km : ""])
+    joinDetails([schedule.type, [schedule.date ? date(schedule.date) : "", clean(schedule.place) ? "@ " + clean(schedule.place) : ""].filter(Boolean).join(" "), schedule.km != null && schedule.km !== "" ? "KM-" + schedule.km : ""])
   ), alert: schedule.km !== "" && schedule.km != null && Number(schedule.km) > 4500 });
   const schedules = [
     {...item("Major Schedule", joinDetails([entry.majorScheduleTypeCode, date(entry.majorScheduleDate)]) + (majorScheduleOverdue(entry.majorScheduleDate, entry.date) ? " (OVERDUE)" : "")), alert:majorScheduleOverdue(entry.majorScheduleDate, entry.date)},
@@ -93,6 +93,7 @@ function detailSections(entry, locomotives) {
     {...item("By PM Sh:",entry.arrivalPmName),pairKey:"arrival-detach"},
     {...item("Yard Dep",atPlace(entry.arrivalYardDepartureTime,entry.arrivalYardSignal)),pairKey:"arrival-shed"},
     {...item("Shed Arrival",atPlace(entry.arrivalShedArrivalTime,entry.arrivalLineNumber)),pairKey:"arrival-shed"},
+    item("Loco Secured", entry.locoSecured === "Other" ? entry.locoSecuredOther : entry.locoSecured),
   ];
   const departure = [
     {...item("Loco Takeover", atPlace(entry.locoTakeoverTime, entry.locoTakeoverPlace)), pairKey:"takeover-checked"}, {...item("Checked Upto Time", time(entry.locoCheckedUptoTime)), pairKey:"takeover-checked"},
@@ -109,7 +110,7 @@ function detailSections(entry, locomotives) {
     {...item("Departure Time", time(entry.finalDepartureTime)), pairKey:"departure-power"},
     ...(isDot ? [{...item("Power Car",entry.powerCarNumber),pairKey:"departure-power"}] : []),
   ];
-  const officials = (entry.officialDetails || []).filter(official => clean(official.name)).map((official, index) => item(`Official ${index + 1}`, joinDetails([official.designation, official.name])));
+  const officials = (entry.officialDetails || []).filter(official => clean(official.name)).map(official => item(clean(official.designation) || "Official", official.name));
   const additional = (entry.additionalLocomotives || []).map((loco, index) => item(`Additional Loco ${index + 1}`, joinDetails([loco.locomotiveNumberSnapshot,loco.locomotiveType,loco.locomotiveShed,loco.cabSelection,loco.ptType])));
   const extra = [
     item("Repair List", entry.repairList), item("Remarks", entry.remarks),
@@ -135,7 +136,7 @@ function detailSections(entry, locomotives) {
     { title:"Schedule Details", rows: schedules },
     ...(entry.movementType === "arrival" ? [{ title:"Arrival Details", rows: arrival }] : []),
     ...((entry.movementType === "departure" || isDot) ? [{ title:"Departure Details", rows: departure }] : []),
-    ...(entry.movementType === "shed_shunting" ? [{title:"Shed Shunting",rows:[item("TOC Time",time(entry.shuntingTocTime)),item("TOC Place",entry.shuntingTocPlace),item("Movement Upto",entry.shuntingMovementUpto),item("Stable Time",time(entry.shuntingStableTime)),item("Stable Place",entry.shuntingStablePlace),item("CC Name",entry.shuntingCCName)]}] : []),
+    ...(entry.movementType === "shed_shunting" ? [{title:"Shed Shunting",rows:[item("TOC Time",time(entry.shuntingTocTime)),item("TOC Place",entry.shuntingTocPlace),item("Movement Upto",entry.shuntingMovementUpto),item("Stable Time",time(entry.shuntingStableTime)),item("Stable Place",entry.shuntingStablePlace),item("Loco Secured",entry.locoSecured === "Other" ? entry.locoSecuredOther : entry.locoSecured),item("CC Name",entry.shuntingCCName)]}] : []),
     { title:"Other Details", rows: extra },
     { title:"Private Number Details", rows: privateNumbers },
     { title:"Officials", rows: officials },
