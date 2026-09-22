@@ -54,7 +54,7 @@ export const BRAKE_SYSTEM_OPTIONS = ["E70", "CCB 2.0", "CCB 1.5"];
 export const SPM_MAKE_OPTIONS = ["MEDHA", "TELPRO", "LAXVEN", "Other"];
 export const LOCO_OFFER_PLACE_OPTIONS = ["SH-329", "SH-306", "SH-182", "SH-184", "SH-307", "Other"];
 export const BP_FP_PLACE_OPTIONS = ["Yard", "PF", "Other"];
-export const OFFICIAL_DESIGNATION_OPTIONS = ["PM", "Power Cabin", "LI Punctuality", "CC"];
+export const OFFICIAL_DESIGNATION_OPTIONS = ["POINTS MEN", "LI PUNCTUALITY", "POWER CABIN", "CC NEW SHED", "CC OLD SHED"];
 export const DEFAULT_STAFF_NAMES = [
   "ABHILASHA KUSHWAHA",
   "ABHISHEK PARIMAL AKR",

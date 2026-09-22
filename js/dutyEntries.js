@@ -2144,7 +2144,7 @@ async function showForm(container, setHeaderTitle, entryId) {
     const officialNumber = original ? entry.officialDetails.indexOf(original) + 1 : entry.officialDetails.length + 1;
     const designationField = el("div", { class: "movement-detail-field" }, [
       fieldLabel("Designation"),
-      createDropdown(OFFICIAL_DESIGNATION_OPTIONS, official.designation, (value) => {
+      createDropdown([...new Set([...OFFICIAL_DESIGNATION_OPTIONS, ...(official.designation ? [official.designation] : [])])], official.designation, (value) => {
         official.designation = value;
       }, { "aria-label": "Designation" }),
     ]);
