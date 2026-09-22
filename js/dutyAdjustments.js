@@ -334,13 +334,15 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
       const saveButton=event.currentTarget;
       if(saveButton.disabled)return;
       saveButton.disabled=true;
+      saveButton.textContent="Saving…";
       let savedCount=0, skippedCount=0;
       try {
       const seen = new Set((await DB.getAll("adjustmentRecords")).map(adjustmentKey));
+      const recordsToSave = [];
       for (const row of rows) {
         const key=adjustmentKey(row);
         if(seen.has(key)){skippedCount++;continue;}
-        await DB.put("adjustmentRecords", {
+        recordsToSave.push({
           ...row,
           id: crypto.randomUUID(),
           batchId,
@@ -357,16 +359,20 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
         });
         seen.add(key);savedCount++;
       }
-      let savedMessage = `${savedCount} adjustment records saved.${skippedCount ? " " + skippedCount + " duplicates skipped." : ""}`;
-      try {
-        const syncResult = await syncPendingAdjustmentRecords({ interactive: true });
-        if (syncResult.synced > 0) savedMessage = `${savedMessage} Google Sheet synced.`;
-      } catch (error) {
-        savedMessage = `${savedMessage} Sheet sync pending.`;
-      }
-      showToast(savedMessage);
+      await DB.putMany("adjustmentRecords", recordsToSave);
       await mountDutyAdjustmentTab(container, setHeaderTitle);
-      } catch(error) {showToast(error.message || "Could not save adjustments.");saveButton.disabled=false;}
+      const savedMessage = `${savedCount} adjustment record${savedCount===1?"":"s"} saved on this device.${skippedCount ? " " + skippedCount + " duplicates skipped." : ""}`;
+      const overlay=el("div",{class:"overlay",role:"dialog","aria-modal":"true","aria-label":"Adjustment save result"});
+      const syncStatus=el("p",{role:"status"},"Google Sheet sync is running in the background. Your local save is complete.");
+      const ok=el("button",{class:"primary-btn",type:"button",onclick:()=>overlay.remove()},"OK");
+      overlay.appendChild(el("div",{class:"overlay-card"},[
+        el("h2",{},savedCount ? "Saved Successfully" : "Already Saved"),el("p",{},savedMessage),syncStatus,ok,
+      ]));
+      document.body.appendChild(overlay);ok.focus();
+      syncPendingAdjustmentRecords({interactive:false}).then(result=>{
+        syncStatus.textContent=result.status==="not-linked" ? "Google Sheet is not linked. Your records are saved on this device." : "Google Sheet sync completed.";
+      }).catch(()=>{syncStatus.textContent="Saved on this device. Sheet sync is pending—reconnect Google and use Sync Pending Records in Settings.";});
+      } catch(error) {showToast(error.message || "Could not save adjustments.");saveButton.disabled=false;saveButton.textContent="Save Adjustment Records";}
     },
   }, "Save Adjustment Records"));
   container.appendChild(formPage);

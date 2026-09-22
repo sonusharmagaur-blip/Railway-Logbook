@@ -132,7 +132,14 @@ function sheetRowRecord(values) {
   return {id,date,staffName,adjustmentType:type,originalPosition,adjustedPosition,remark};
 }
 
-export async function syncPendingAdjustmentRecords({ interactive = false } = {}) {
+let adjustmentSyncQueue = Promise.resolve();
+export function syncPendingAdjustmentRecords(options = {}) {
+  const result = adjustmentSyncQueue.then(() => performAdjustmentSync(options));
+  adjustmentSyncQueue = result.catch(() => {});
+  return result;
+}
+
+async function performAdjustmentSync({ interactive = false } = {}) {
   const linked = await getLinkedSheet();
   if (!linked) return { status: "not-linked", synced: 0, pending: 0 };
   const token = await accessToken(interactive);

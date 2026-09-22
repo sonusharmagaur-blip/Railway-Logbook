@@ -101,14 +101,15 @@ function detailSections(entry, locomotives) {
     {...item("Engine On Train", atPlace(entry.engineOnTrainTime, entry.engineOnTrainPlace)), pairKey:"offer-eot"},
     {...item("HOG Attached Time", [entry.hogAttachedTime && entry.hogAttachedToTime ? time(entry.hogAttachedTime)+"-"+time(entry.hogAttachedToTime) : entry.hogAttachedTime ? "FROM "+time(entry.hogAttachedTime) : entry.hogAttachedToTime ? "TO "+time(entry.hogAttachedToTime) : "", clean(entry.hogAttachedPlace) ? "@ "+clean(entry.hogAttachedPlace) : ""].filter(Boolean).join(" ")), pairKey:"hog-bpfp"},
     {...item("BP/FP Buildup", atPlace(entry.bpFpTime, entry.bpFpPlace === "Other" ? entry.bpFpPlaceOther : entry.bpFpPlace)),pairKey:"hog-bpfp"},
-    {...item("Yard Dep / Signal", [entry.departureTime ? time(entry.departureTime) : "", clean(entry.yardSignal) ? "FROM SIGNAL "+clean(entry.yardSignal) : ""].filter(Boolean).join(" ")), pairKey:"yard-placement"},
+    {...item("Yard Dep", [entry.departureTime ? time(entry.departureTime) : "", clean(entry.yardSignal) ? "FROM SIGNAL "+clean(entry.yardSignal) : ""].filter(Boolean).join(" ")), pairKey:"yard-placement"},
     {...item("Placement / Place", atPlace(entry.placementTime, clean(entry.placementPfNumber) ? (/^PF\b/i.test(clean(entry.placementPfNumber)) ? clean(entry.placementPfNumber) : "PF "+clean(entry.placementPfNumber)) : "")), pairKey:"yard-placement"},
-    {...item("Continuity Time", time(entry.continuityTime)),pairKey:"continuity-bpc"},
-    {...item("BPC Time", time(entry.bpcTime)),pairKey:"continuity-bpc"},
-    {...item("Made Over To", [entry.madeOverChargeName,entry.madeOverChargeHQ].filter(v=>clean(v)).join(" / ")),pairKey:"made-over"},
-    {...item("Made Over Time", time(entry.madeOverChargeTime)),pairKey:"made-over"},
-    {...item("Departure Time", time(entry.finalDepartureTime)), pairKey:"departure-power"},
-    ...(isDot ? [{...item("Power Car",entry.powerCarNumber),pairKey:"departure-power"}] : []),
+    {...item("Made Over To", [
+      [entry.madeOverChargeName,entry.madeOverChargeHQ].filter(v=>clean(v)).join(", "),
+      entry.madeOverChargeTime ? "@ "+time(entry.madeOverChargeTime) : "",
+    ].filter(Boolean).join(" ")),fullWidth:true},
+    {...item("CONT. / BPC TIME", entry.continuityTime && entry.bpcTime ? time(entry.continuityTime)+" / "+time(entry.bpcTime) : entry.continuityTime ? "CONT. "+time(entry.continuityTime) : entry.bpcTime ? "BPC "+time(entry.bpcTime) : ""),pairKey:"continuity-departure"},
+    {...item("Departure Time", time(entry.finalDepartureTime)), pairKey:"continuity-departure"},
+    ...(isDot ? [item("Power Car",entry.powerCarNumber)] : []),
   ];
   const officials = (entry.officialDetails || []).filter(official => clean(official.name)).map(official => item(clean(official.designation) || "Official", official.name));
   const additional = (entry.additionalLocomotives || []).map((loco, index) => item(`Additional Loco ${index + 1}`, joinDetails([loco.locomotiveNumberSnapshot,loco.locomotiveType,loco.locomotiveShed,loco.cabSelection,loco.ptType])));
@@ -189,7 +190,7 @@ function prepareDiary(ctx, groups, entry = {}) {
     if(pending.length)pairs.push(pending);
     const rows=pairs.map(pairFields=>{
       const pair=pairFields.map(f=>{
-        const stacked=group.title==="Schedule Details";
+        const stacked=false;
         const fullWidth=Boolean(f.fullWidth)||pairFields.length===1;
         ctx.font="700 8.5px Arial";
         const labels=wrap(ctx,f.label.toUpperCase(),stacked?(fullWidth?494:236):91);
