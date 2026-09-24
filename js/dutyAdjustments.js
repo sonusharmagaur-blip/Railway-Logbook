@@ -42,10 +42,18 @@ function uniqueRecent(records, key) {
     .slice(0, 20);
 }
 
-function addDatalist(container, id, values) {
-  const list = el("datalist", { id });
-  for (const value of values) list.appendChild(el("option", { value }));
-  container.appendChild(list);
+function positionField(row, key, label, values, index) {
+  const input=el("input",{type:"text",value:row[key],placeholder:"Enter manually","aria-label":`Row ${index+1} ${label}`,oninput:event=>{
+    row[key]=event.target.value;
+    recent.value=values.includes(row[key])?row[key]:"";
+  }});
+  const recent=el("select",{"aria-label":`Row ${index+1} recent ${label}`,onchange:event=>{
+    if (!event.target.value) return;
+    row[key]=event.target.value;input.value=row[key];
+  }},[el("option",{value:""},values.length?"Choose recent / enter below":"No recent values — enter below"),
+    ...values.map(value=>el("option",{value},value))]);
+  recent.value=values.includes(row[key])?row[key]:"";
+  return el("div",{class:"adjustment-field"},[el("label",{},label),recent,input]);
 }
 
 function displayAdjustmentType(record) {
@@ -67,13 +75,14 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
   const filters = el("div", { class: "form-section adjustment-filters" });
   filters.appendChild(el("div", { class: "form-section-title" }, "Search Saved Records"));
 
-  const staffListId = "adjustment-staff-search";
-  const staffFilter = el("input", {type:"search",list:staffListId,placeholder:"Search or select staff name","aria-label":"Filter by staff name"});
   const filterNames = [...new Set([
     ...staffMembers.map((member) => member.name),
     ...allRecords.map((record) => record.staffName).filter(Boolean),
-  ])].sort((a, b) => a.localeCompare(b));
-  addDatalist(filters, staffListId, filterNames);
+  ].map(normalizedText).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const staffFilter=el("select",{"aria-label":"Filter by staff name"},[
+    el("option",{value:""},"All staff / Select staff name"),
+    ...filterNames.map(name=>el("option",{value:name},name)),
+  ]);
 
   const dateFilter = el("input", {
     type: "date",
@@ -172,7 +181,6 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
     }
   }
 
-  staffFilter.addEventListener("input", () => {viewAll=false;renderRecords();});
   staffFilter.addEventListener("change", () => {viewAll=false;renderRecords();});
   dateFilter.addEventListener("change", renderRecords);
   renderRecords();
@@ -201,12 +209,8 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
     el("div", { class: "adjustment-form-hint" }, "Date defaults to tomorrow"),
   ]));
 
-  const originalListId = `adjustment-original-${crypto.randomUUID()}`;
-  const adjustedListId = `adjustment-adjusted-${crypto.randomUUID()}`;
-  const remarkListId = `adjustment-remark-${crypto.randomUUID()}`;
-  addDatalist(formPage, originalListId, uniqueRecent(recentRecords, "originalPosition"));
-  addDatalist(formPage, adjustedListId, uniqueRecent(recentRecords, "adjustedPosition"));
-  addDatalist(formPage, remarkListId, uniqueRecent(recentRecords, "remark"));
+  const originalSuggestions=uniqueRecent(recentRecords,"originalPosition");
+  const adjustedSuggestions=uniqueRecent(recentRecords,"adjustedPosition");
 
   const rowsHolder = el("div", { class: "adjustment-form-rows" });
 
@@ -276,26 +280,8 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
             typeSelect,
             otherTypeInput,
           ]),
-          el("div", { class: "adjustment-field" }, [
-            el("label", {}, "Original Position"),
-            el("input", {
-              type: "text",
-              list: originalListId,
-              value: row.originalPosition,
-              placeholder: "Enter or select recent",
-              oninput: (event) => { row.originalPosition = event.target.value; },
-            }),
-          ]),
-          el("div", { class: "adjustment-field" }, [
-            el("label", {}, "Adjusted Position"),
-            el("input", {
-              type: "text",
-              list: adjustedListId,
-              value: row.adjustedPosition,
-              placeholder: "Enter or select recent",
-              oninput: (event) => { row.adjustedPosition = event.target.value; },
-            }),
-          ]),
+          positionField(row,"originalPosition","Original Position",originalSuggestions,index),
+          positionField(row,"adjustedPosition","Adjusted Position",adjustedSuggestions,index),
           el("div", { class: "adjustment-field adjustment-remark-field" }, [
             el("label", {}, "Remark"),
             el("select", {"aria-label":`Row ${index+1} request remark`,onchange:(event)=>{row.remark=event.target.value;}}, ["Staff Request","Our Request"].map(value=>el("option",{value,...(row.remark===value?{selected:""}:{})},value))),
