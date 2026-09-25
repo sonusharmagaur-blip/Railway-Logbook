@@ -1185,13 +1185,3 @@ html, body {
 .stable-photo-preview figcaption { font-size:12px; }
 .dialog-close { display:block; position:sticky; top:0; z-index:5; margin:0 0 6px auto; width:40px; height:40px; border:1px solid var(--border); border-radius:50%; background:#fff; color:var(--maroon); font-size:28px; cursor:pointer; }
 .stable-controls [hidden] { display:none; }
-.sheet-pdf-settings > summary { cursor:pointer; }
-.sheet-pdf-settings > div > p, .sheet-pdf-settings > div > button { margin:12px; }
-.sheet-pdf-page .card { display:grid; gap:10px; }
-.sheet-pdf-page input, .sheet-pdf-page select { width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:14px; }
-.sheet-pdf-page small { color:var(--text-muted); line-height:1.4; }
-.sheet-pdf-saved input[type="url"] { width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:13px; }
-.sheet-pdf-dialog { width:min(94vw,800px); }
-.sheet-pdf-results canvas { display:block; width:100%; height:auto; margin:12px auto; border:1px solid var(--border); }
-.sheet-pdf-actions { display:flex; gap:10px; position:sticky; top:0; background:var(--cream); padding:8px; z-index:2; }
-.sheet-pdf-actions button { flex:1; }
