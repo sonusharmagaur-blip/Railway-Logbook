@@ -6,6 +6,16 @@ import * as Drive from "./drive.js";
 import * as Sheets from "./sheets.js";
 import { showToast } from "./toast.js";
 
+function showCompletion(title, message) {
+  const previous=document.activeElement;
+  const overlay=el("div",{class:"overlay",role:"dialog","aria-modal":"true","aria-label":title});
+  const close=()=>{overlay.remove();if(previous?.isConnected)previous.focus();};
+  const ok=el("button",{type:"button",class:"primary-btn",onclick:close},"OK");
+  overlay.appendChild(el("div",{class:"overlay-card"},[el("h2",{},title),el("p",{},message),ok]));
+  overlay.addEventListener("keydown",event=>{if(event.key==="Escape")close();});
+  document.body.appendChild(overlay);ok.focus();
+}
+
 export async function mountSettingsTab(container, setHeaderTitle) {
   setHeaderTitle("Settings");
   container.innerHTML = "";
@@ -20,6 +30,17 @@ export async function mountSettingsTab(container, setHeaderTitle) {
     el("input", { type: "text", value: profile.name || "", oninput: (e) => { profile.name = e.target.value; profileAutosave.fieldChanged(); } }),
   ]));
   container.appendChild(profileSection);
+  const sheetPdfSection=el("details",{class:"form-section sheet-pdf-settings"},[
+    el("summary",{class:"form-section-title"},"Share Sheets as PDF"),
+  ]);
+  const sheetPdfHolder=el("div");sheetPdfSection.appendChild(sheetPdfHolder);container.appendChild(sheetPdfSection);
+  let sheetPdfLoaded=false;
+  sheetPdfSection.addEventListener("toggle",async()=>{
+    if(!sheetPdfSection.open||sheetPdfLoaded)return;
+    sheetPdfLoaded=true;
+    try{await (await import("./sheetPdf.js")).renderSheetPdfSettings(sheetPdfHolder);}
+    catch(error){sheetPdfLoaded=false;sheetPdfHolder.textContent=error.message;}
+  });
 
   // --- Staff names used by Duty Adjustment Record ---
   const staffSection = el("div", { class: "form-section" });
@@ -166,32 +187,39 @@ export async function mountSettingsTab(container, setHeaderTitle) {
   await refreshStatus();
 
   const connectBtn = el("button", { class: "secondary-btn", onclick: async () => {
+    connectBtn.disabled=true;connectBtn.textContent="Connecting / backing up…";
+    let backedUp=false;
     try {
       const clientId = clientIdInput.value.trim();
       const saveClientId = Drive.setClientId(clientId);
       await Drive.signIn({ forceConsent: true, clientId });
       await saveClientId;
       await Drive.performBackup();
+      backedUp=true;
       const sheetSync = await Sheets.syncPendingAdjustmentRecords({ interactive: false });
-      showToast(sheetSync.synced > 0 ? `Connected, backed up and ${sheetSync.synced} Sheet record${sheetSync.synced === 1 ? "" : "s"} synced` : "Connected and backed up");
+      showCompletion("Drive Backup Complete", sheetSync.status==="not-linked" ? "Google Drive backup saved. Google Sheet is not linked, so records were not synced." : `Google Drive backup saved. ${sheetSync.synced} pending Sheet record(s) synced; Sheet is up to date.`);
       await Promise.all([refreshStatus(), refreshSheetStatus()]);
     } catch (e) {
-      showToast(e.message || "Sign-in failed");
+      showCompletion(backedUp ? "Backup Saved — Sheet Sync Incomplete" : "Backup Not Completed", (backedUp ? "Drive backup was saved. " : "")+(e.message || "Please reconnect and retry."));
+    } finally {
+      connectBtn.disabled=false;connectBtn.textContent="Connect Google Account & Back Up";
     }
   } }, "Connect Google Account & Back Up");
 
   backupNowBtn = el("button", { class: "primary-btn", style: "margin-top:8px;", onclick: async () => {
+    backupNowBtn.disabled=true;
     backupNowBtn.textContent = "Backing up…";
     try {
       const clientId = clientIdInput.value.trim();
       const saveClientId = Drive.setClientId(clientId);
       await Drive.performBackup({ interactive: true, clientId });
       await saveClientId;
-      showToast("Backup complete");
+      showCompletion("Drive Backup Complete", "Your backup has been saved successfully to Google Drive.");
     } catch (e) {
-      showToast(e.message || "Backup failed");
+      showCompletion("Backup Not Completed", e.message || "Backup failed. Please retry.");
     } finally {
       backupNowBtn.textContent = "Backup Now";
+      backupNowBtn.disabled=false;
       await refreshStatus();
     }
   } }, "Backup Now");
@@ -292,10 +320,10 @@ export async function mountSettingsTab(container, setHeaderTitle) {
         await Drive.setClientId(clientIdInput.value.trim());
         const result = await Sheets.syncPendingAdjustmentRecords({ interactive: true });
         if (result.status === "not-linked") throw new Error("Link or create a Google Sheet first.");
-        showToast(result.synced ? `${result.synced} record${result.synced === 1 ? "" : "s"} synced.` : "Google Sheet is already up to date.");
+        showCompletion("Sheet Sync Complete", result.synced ? `${result.synced} record${result.synced === 1 ? "" : "s"} synced successfully.` : "Google Sheet is already up to date. No pending records.");
         await refreshSheetStatus();
       } catch (error) {
-        showToast(error.message || "Google Sheet sync failed.");
+        showCompletion("Sheet Sync Not Completed", error.message || "Google Sheet sync failed. Please retry.");
       } finally {
         syncSheetBtn.disabled = false;
         syncSheetBtn.textContent = "Sync Pending Records";
