@@ -5,6 +5,29 @@ import { pullAdjustmentRecordsFromSheet, syncPendingAdjustmentRecords } from "./
 import { adjustmentKey, uniqueAdjustments, normalizedText, recentAdjustmentRange } from "./adjustmentUtils.js";
 
 const ADJUSTMENT_TYPES = ["Shift", "Link", "Rest", "Other"];
+const POSITION_HISTORY_PREFIX = "adjustment-position-history:";
+
+// Keep reusable positions independently of the record list and its filters.
+async function preservePositionHistory(records) {
+  const saved=(await DB.getAll("meta")).filter(item=>item.key.startsWith(POSITION_HISTORY_PREFIX));
+  const history=new Map(saved.map(item=>[item.key,item.value]));
+  const updates=new Map();
+  for(const record of records){
+    const value={};
+    for(const field of ["adjustmentType","adjustmentTypeOther","originalPosition","adjustedPosition"])
+      value[field]=String(record[field]||"").trim();
+    if(!value.originalPosition && !value.adjustedPosition)continue;
+    if(value.adjustmentType!=="Other")value.adjustmentTypeOther="";
+    value.lastModified=record.lastModified||record.createdAt||record.date||"";
+    const key=POSITION_HISTORY_PREFIX+JSON.stringify([value.adjustmentType,value.adjustmentTypeOther,value.originalPosition,value.adjustedPosition].map(normalizedText));
+    const existing=history.get(key);
+    if(!existing || value.lastModified>(existing.lastModified||"")){
+      history.set(key,value);updates.set(key,{key,value});
+    }
+  }
+  if(updates.size)await DB.putMany("meta",[...updates.values()]);
+  return [...history.values()];
+}
 
 function nextDayInputValue() {
   const date = new Date();
@@ -38,8 +61,7 @@ function uniqueRecent(records, key) {
       if (!value || seen.has(normalized)) return false;
       seen.add(normalized);
       return true;
-    })
-    .slice(0, 20);
+    });
 }
 
 function positionField(row, key, label, records, index) {
@@ -218,6 +240,10 @@ export async function mountDutyAdjustmentTab(container, setHeaderTitle) {
 }
 
 async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recentRecords) {
+  // Reload at form-open time, including records synced since the list opened.
+  const currentRecords=await DB.getAll("adjustmentRecords");
+  try {recentRecords=await preservePositionHistory(currentRecords);}
+  catch {recentRecords=currentRecords;showToast("Could not update suggestion history. Current records are still available.");}
   setHeaderTitle("Add Duty Adjustment");
   container.innerHTML = "";
   const rows = [newAdjustmentRow()];
@@ -365,6 +391,8 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
         seen.add(key);savedCount++;
       }
       await DB.putMany("adjustmentRecords", recordsToSave);
+      try {await preservePositionHistory(recordsToSave);}
+      catch {showToast("Records saved. Suggestion history will be rebuilt next time.");}
       await mountDutyAdjustmentTab(container, setHeaderTitle);
       const savedMessage = `${savedCount} adjustment record${savedCount===1?"":"s"} saved on this device.${skippedCount ? " " + skippedCount + " duplicates skipped." : ""}`;
       const overlay=el("div",{class:"overlay",role:"dialog","aria-modal":"true","aria-label":"Adjustment save result"});
