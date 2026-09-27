@@ -43,6 +43,7 @@ function uniqueRecent(records, key) {
 }
 
 function positionField(row, key, label, records, index) {
+  let blurTimer;
   const suggestions=el("div",{hidden:true,role:"group","aria-label":`Row ${index+1} ${label} suggestions`});
   const input=el("input",{type:"text",value:row[key],placeholder:"Type to see recent suggestions",autocomplete:"off","aria-label":`Row ${index+1} ${label}`,oninput:event=>{
     row[key]=event.target.value;showSuggestions();
@@ -58,13 +59,21 @@ function positionField(row, key, label, records, index) {
       const normalized=normalizedText(value);if(seen.has(normalized))return false;seen.add(normalized);return true;
     });
     const matches=query ? values.filter(value=>value.toLowerCase().includes(query)).slice(0,6) : [];
-    suggestions.replaceChildren(...matches.map(value=>el("button",{type:"button",class:"secondary-btn",style:"display:block;width:100%;text-align:left;margin-top:4px;",onclick:()=>{
-      row[key]=value;input.value=value;suggestions.hidden=true;input.focus();
+    suggestions.replaceChildren(...matches.map(value=>el("button",{type:"button",class:"secondary-btn",style:"display:block;width:100%;text-align:left;margin-top:4px;",onpointerdown:event=>{
+      // Keep the input focused until the tap's click selects the suggestion.
+      event.preventDefault();clearTimeout(blurTimer);
+    },onclick:()=>{
+      clearTimeout(blurTimer);row[key]=value;input.value=value;suggestions.hidden=true;input.focus();
     }},value)));
     suggestions.hidden=matches.length===0;
   }
   const field=el("div",{class:"adjustment-field"},[el("label",{},label),input,suggestions]);
-  field.addEventListener("focusout",event=>{if(!field.contains(event.relatedTarget))suggestions.hidden=true;});
+  field.addEventListener("focusout",event=>{
+    if(field.contains(event.relatedTarget))return;
+    // Mobile browsers may report no relatedTarget before dispatching click.
+    clearTimeout(blurTimer);blurTimer=setTimeout(()=>{if(!field.contains(document.activeElement))suggestions.hidden=true;},250);
+  });
+  field.addEventListener("focusin",()=>clearTimeout(blurTimer));
   field.addEventListener("keydown",event=>{if(event.key==="Escape")suggestions.hidden=true;});
   return field;
 }
