@@ -31,7 +31,7 @@ function newAdjustmentRow() {
 function uniqueRecent(records, key) {
   const seen = new Set();
   return [...records]
-    .sort((a, b) => (b.lastModified || b.createdAt || "").localeCompare(a.lastModified || a.createdAt || ""))
+    .sort((a, b) => (b.lastModified || b.createdAt || b.date || "").localeCompare(a.lastModified || a.createdAt || a.date || ""))
     .map((record) => String(record[key] || "").trim())
     .filter((value) => {
       const normalized = value.toLowerCase();
@@ -42,13 +42,21 @@ function uniqueRecent(records, key) {
     .slice(0, 20);
 }
 
-function positionField(row, key, label, values, index) {
+function positionField(row, key, label, records, index) {
   const suggestions=el("div",{hidden:true,role:"group","aria-label":`Row ${index+1} ${label} suggestions`});
   const input=el("input",{type:"text",value:row[key],placeholder:"Type to see recent suggestions",autocomplete:"off","aria-label":`Row ${index+1} ${label}`,oninput:event=>{
     row[key]=event.target.value;showSuggestions();
   }});
   function showSuggestions(){
     const query=input.value.trim().toLowerCase();
+    const partner=key==="originalPosition" ? "adjustedPosition" : "originalPosition";
+    const sameType=records.filter(record=>normalizedText(record.adjustmentType)===normalizedText(row.adjustmentType) && (row.adjustmentType!=="Other" || normalizedText(record.adjustmentTypeOther)===normalizedText(row.adjustmentTypeOther)));
+    const paired=normalizedText(row[partner]) ? sameType.filter(record=>normalizedText(record[partner])===normalizedText(row[partner])) : [];
+    // Prefer recently used pairs, then this adjustment type, then other history.
+    const seen=new Set();
+    const values=[...uniqueRecent(paired,key),...uniqueRecent(sameType,key),...uniqueRecent(records,key)].filter(value=>{
+      const normalized=normalizedText(value);if(seen.has(normalized))return false;seen.add(normalized);return true;
+    });
     const matches=query ? values.filter(value=>value.toLowerCase().includes(query)).slice(0,6) : [];
     suggestions.replaceChildren(...matches.map(value=>el("button",{type:"button",class:"secondary-btn",style:"display:block;width:100%;text-align:left;margin-top:4px;",onclick:()=>{
       row[key]=value;input.value=value;suggestions.hidden=true;input.focus();
@@ -214,9 +222,6 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
     el("div", { class: "adjustment-form-hint" }, "Date defaults to tomorrow"),
   ]));
 
-  const originalSuggestions=uniqueRecent(recentRecords,"originalPosition");
-  const adjustedSuggestions=uniqueRecent(recentRecords,"adjustedPosition");
-
   const rowsHolder = el("div", { class: "adjustment-form-rows" });
 
   function renderRows() {
@@ -285,8 +290,8 @@ async function openAdjustmentForm(container, setHeaderTitle, staffMembers, recen
             typeSelect,
             otherTypeInput,
           ]),
-          positionField(row,"originalPosition","Original Position",originalSuggestions,index),
-          positionField(row,"adjustedPosition","Adjusted Position",adjustedSuggestions,index),
+          positionField(row,"originalPosition","Original Position",recentRecords,index),
+          positionField(row,"adjustedPosition","Adjusted Position",recentRecords,index),
           el("div", { class: "adjustment-field adjustment-remark-field" }, [
             el("label", {}, "Remark"),
             el("select", {"aria-label":`Row ${index+1} request remark`,onchange:(event)=>{row.remark=event.target.value;}}, ["Staff Request","Our Request"].map(value=>el("option",{value,...(row.remark===value?{selected:""}:{})},value))),
