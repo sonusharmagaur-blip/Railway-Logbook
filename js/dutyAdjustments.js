@@ -43,17 +43,22 @@ function uniqueRecent(records, key) {
 }
 
 function positionField(row, key, label, values, index) {
-  const input=el("input",{type:"text",value:row[key],placeholder:"Enter manually","aria-label":`Row ${index+1} ${label}`,oninput:event=>{
-    row[key]=event.target.value;
-    recent.value=values.includes(row[key])?row[key]:"";
+  const suggestions=el("div",{hidden:true,role:"group","aria-label":`Row ${index+1} ${label} suggestions`});
+  const input=el("input",{type:"text",value:row[key],placeholder:"Type to see recent suggestions",autocomplete:"off","aria-label":`Row ${index+1} ${label}`,oninput:event=>{
+    row[key]=event.target.value;showSuggestions();
   }});
-  const recent=el("select",{"aria-label":`Row ${index+1} recent ${label}`,onchange:event=>{
-    if (!event.target.value) return;
-    row[key]=event.target.value;input.value=row[key];
-  }},[el("option",{value:""},values.length?"Choose recent / enter below":"No recent values — enter below"),
-    ...values.map(value=>el("option",{value},value))]);
-  recent.value=values.includes(row[key])?row[key]:"";
-  return el("div",{class:"adjustment-field"},[el("label",{},label),recent,input]);
+  function showSuggestions(){
+    const query=input.value.trim().toLowerCase();
+    const matches=query ? values.filter(value=>value.toLowerCase().includes(query)).slice(0,6) : [];
+    suggestions.replaceChildren(...matches.map(value=>el("button",{type:"button",class:"secondary-btn",style:"display:block;width:100%;text-align:left;margin-top:4px;",onclick:()=>{
+      row[key]=value;input.value=value;suggestions.hidden=true;input.focus();
+    }},value)));
+    suggestions.hidden=matches.length===0;
+  }
+  const field=el("div",{class:"adjustment-field"},[el("label",{},label),input,suggestions]);
+  field.addEventListener("focusout",event=>{if(!field.contains(event.relatedTarget))suggestions.hidden=true;});
+  field.addEventListener("keydown",event=>{if(event.key==="Escape")suggestions.hidden=true;});
+  return field;
 }
 
 function displayAdjustmentType(record) {

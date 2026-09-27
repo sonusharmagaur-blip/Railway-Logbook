@@ -57,11 +57,16 @@ async function compressPhoto(file) {
 
 export function stableControls(entry, onChange) {
   const holder=el("div",{class:"stable-controls"});
-  const other=el("input",{type:"text",value:entry.locoSecuredOther || "",placeholder:"Enter securing details","aria-label":"Loco secured other details",oninput:e=>{entry.locoSecuredOther=e.target.value;onChange();}});
+  const standard="With 04 Wooden Wedges, Hand Brake applied & MCE OFF.";
+  const arrival=entry.movementType==="arrival";
+  const legacy=arrival && entry.locoSecured && ![standard,"Other"].includes(entry.locoSecured);
+  const other=el("input",{type:"text",value:legacy ? entry.locoSecured : entry.locoSecuredOther || "",placeholder:"Enter securing details","aria-label":"Loco secured other details",oninput:e=>{entry.locoSecured="Other";entry.locoSecuredOther=e.target.value;onChange();}});
   const select=el("select",{"aria-label":"Loco Secured",onchange:e=>{
-    entry.locoSecured=e.target.value;other.hidden=entry.locoSecured!=="Other";onChange();
-  }}, ["","4 WW","Hand Brakes","MCE Off","4 WW and Hand Brakes and MCE Off","Other"].map(value=>el("option",{value},value || "Select / Not entered")));
-  select.value=entry.locoSecured || "";other.hidden=entry.locoSecured!=="Other";
+    entry.locoSecured=e.target.value;other.hidden=entry.locoSecured!=="Other";
+    if(entry.locoSecured==="Other")entry.locoSecuredOther=other.value;
+    onChange();
+  }}, (arrival ? ["",standard,"Other"] : ["","4 WW","Hand Brakes","MCE Off","4 WW and Hand Brakes and MCE Off","Other"]).map(value=>el("option",{value,...(arrival && !value ? {disabled:true,hidden:true} : {})},value || "Select / Not entered")));
+  select.value=legacy ? "Other" : entry.locoSecured || "";other.hidden=select.value!=="Other";
   const preview=el("div");
   const remove=el("button",{class:"secondary-btn",type:"button",onclick:async()=>{
     await DB.delete("stablePhotos",entry.id);entry.hasStablePhoto=false;onChange();await refresh();
